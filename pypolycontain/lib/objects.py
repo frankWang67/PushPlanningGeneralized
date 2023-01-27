@@ -77,16 +77,52 @@ class zonotope():
         return self.hash_value
 
    
+# class AH_polytope():
+#     """
+#     AH_polytope: Affine Transformation of an H-polytope
+    
+#     Attributes:
+#         * P: The underlying H-polytope :math:`P:\\{x in \\mathbb{R}^q | Hx \\le h\\}`
+#         * T: :math:`\\mathbb{R}^{n \\times q}` matrix: linear transformation
+#         * t: :math:`\\mathbb{R}^{n \\times 1}` vector: translation
+#     """
+#     def __init__(self,T,t,P,color='blue'):
+#         """
+#         Initilization: T,t,P. X=TP+t
+#         """
+#         self.T=T # Matrix n*n_p
+#         self.t=t # vector n*1
+#         self.P=P # Polytope in n_p dimensions
+#         self.n=T.shape[0]
+#         self.type="AH_polytope"
+#         if T.shape[1]!=P.H.shape[1]:
+#             ValueError("Error: not appropriate T size, it is",T.shape[1],P.n)
+#         self.method="Gurobi"
+#         self.hash_value = None
+#         self.distance_program=None
+#         self.vertices_2D=None
+#         self.color=color
+#         self.__name__ = "AH_polytope"
+
+#     def __repr__(self):
+#         return "AH_polytope from R^%d to R^%d"%(self.P.n,self.n)
+
+#     def __hash__(self):
+#         if self.hash_value is None:
+#             self.hash_value = hash(self.P) + hash(str(np.hstack([self.T, self.t])))  # FIXME: better hashing implementation
+#         return self.hash_value
+
+
 class AH_polytope():
     """
-    AH_polytope: Affine Transformation of an H-polytope
-    
+    Affine Transformation of an H-polytope
     Attributes:
-        * P: The underlying H-polytope :math:`P:\\{x in \\mathbb{R}^q | Hx \\le h\\}`
-        * T: :math:`\\mathbb{R}^{n \\times q}` matrix: linear transformation
-        * t: :math:`\\mathbb{R}^{n \\times 1}` vector: translation
+        P: The underlying H-polytope P:{x in R^q | Hx \le h}
+        T: R^(n*q) matrix: linear transformation
+        t: R^{n*1) vector: translation
     """
-    def __init__(self,T,t,P,color='blue'):
+    # THIS USED
+    def __init__(self,T,t,P,mode_string="",mode_consistent=False,applied_u=None,psic_range=None,key_vertex=None,color='r'):
         """
         Initilization: T,t,P. X=TP+t
         """
@@ -94,24 +130,29 @@ class AH_polytope():
         self.t=t # vector n*1
         self.P=P # Polytope in n_p dimensions
         self.n=T.shape[0]
-        self.type="AH_polytope"
         if T.shape[1]!=P.H.shape[1]:
             ValueError("Error: not appropriate T size, it is",T.shape[1],P.n)
+        self.type="AH_polytope"
         self.method="Gurobi"
-        self.hash_value = None
-        self.distance_program=None
-        self.vertices_2D=None
-        self.color=color
+        self.hash_value = 0
+        self.distance_program = None
+        self.color = 'r'
         self.__name__ = "AH_polytope"
+        # FIXME: AH_polytope should contain the hybrid mode string
+        # FIXME: AH_polytope should contain the last applied input
+        self.mode_string=mode_string
+        self.mode_consistent=mode_consistent
+        self.applied_u=applied_u
+        self.psic_range=psic_range
+        if key_vertex is None:
+            self.key_vertex = set()  # empty set
+        else:
+            self.key_vertex = key_vertex
 
     def __repr__(self):
         return "AH_polytope from R^%d to R^%d"%(self.P.n,self.n)
 
-    def __hash__(self):
-        if self.hash_value is None:
-            self.hash_value = hash(self.P) + hash(str(np.hstack([self.T, self.t])))  # FIXME: better hashing implementation
-        return self.hash_value
-    
+
 class hyperbox():
     def __init__(self,N=None,corners=[],d=1):
         """

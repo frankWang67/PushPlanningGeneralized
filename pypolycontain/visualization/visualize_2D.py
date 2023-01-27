@@ -21,7 +21,7 @@ from pypolycontain.lib.operations import to_AH_polytope
 
 try:
     from pypolycontain.lib.operations import AH_polytope_vertices
-    from pypolycontain.lib.objects import AH_polytope
+    from pypolycontain.lib.AH_polytope import AH_polytope
 except:
     warnings.warn("You don't have pypolycontain properly installed. Can not execute 'import pypyplycontain'")
 
@@ -198,11 +198,18 @@ def visualize_obs(Z_obs_list, a=1.5, color=None, alpha=0.5, fig=None, ax=None, a
     return fig,ax
 
 
-def visualize_2D_AH_polytope(list_of_AH_polytopes,a=1.5,color=None,alpha=0.5,fig=None,ax=None,axis_limit=[0],title=r"AH-Polytopes",N=20,epsilon=0.001):
+def visualize_2D_AH_polytope(list_of_AH_polytopes,a=1.5,color=None,alpha=0.5,fig=None,ax=None,axis_limit=[0],title=r"AH-Polytopes",N=20,epsilon=1e-4):
     p_list=[]
     v_all=np.empty((0,2))
-    for Q in list_of_AH_polytopes:
+
+    if fig is None or ax is None:
+        fig, ax = plt.subplots()
+
+    for Q_index, Q in enumerate(list_of_AH_polytopes):
+        p_list.clear()
         v,w=AH_polytope_vertices(Q,N=N,epsilon=epsilon)
+        # print('v:{0}, w:{1}'.format(v, w))
+        # print('Q.t:{0}, Q.T:{1}, Q.H:{2}, Q.h:{3}'.format(Q.t, Q.T, Q.P.H, Q.P.h))
         # Minkowski sum with epsilon ball
         try:
             v=v[ConvexHull(v).vertices,:]
@@ -212,15 +219,17 @@ def visualize_2D_AH_polytope(list_of_AH_polytopes,a=1.5,color=None,alpha=0.5,fig
         v_all=np.vstack((v_all,v))
         p=Polygon(v)
         p_list.append(p)
-    if color is None:
-        p_patch = PatchCollection(p_list, color=[Z.color for Z in list_of_AH_polytopes],alpha=alpha)
-    else:
-        p_patch = PatchCollection(p_list, color=color,alpha=alpha)
+        if Q.mode_string[1] != 'sticking':
+            alpha_applied = min(2*alpha, 1.)
+        else:
+            alpha_applied = alpha
+        if color is None:
+            p_patch = PatchCollection(p_list, color=[Z.color for Z in list_of_AH_polytopes],alpha=alpha_applied)
+        else:
+            p_patch = PatchCollection(p_list, color=color,alpha=alpha_applied)
 #    p_patch = PatchCollection(p_list, color=[(1-zono.x[0,0]>=1,0,zono.x[0,0]>=1) \
 #        for zono in list_of_zonotopes],alpha=0.75)
-    if fig is None or ax is None:
-        fig, ax = plt.subplots()
-    ax.add_collection(p_patch)
+        ax.add_collection(p_patch)
 #    print(axis_limit)
     if len(axis_limit)==1:
         ax.set_xlim([np.min(v_all[:,0])-a,a+np.max(v_all[:,0])])
@@ -230,9 +239,10 @@ def visualize_2D_AH_polytope(list_of_AH_polytopes,a=1.5,color=None,alpha=0.5,fig
         ax.set_ylim([axis_limit[2],axis_limit[3]])
     ax.grid(color=(0,0,0), linestyle='--', linewidth=0.3)
     ax.set_title(title)
+    # ax.set_aspect('equal')
     return fig,ax
 
-def visualize_ND_AH_polytope(list_of_AH_polytopes,dim1, dim2, a=0.005,color=None,alpha=0.5,fig=None,ax=None,axis_limit=[0],title=r"AH-Polytopes",N=50,epsilon=0.001):
+def visualize_ND_AH_polytope(list_of_AH_polytopes,dim1, dim2, a=0.005,color=None,alpha=0.5,fig=None,ax=None,axis_limit=[0],title=r"AH-Polytopes",N=50,epsilon=1e-4):
     '''
     Visualize N-D AH polytope by projecting to dim1 and dim2
     @param list_of_AH_polytopes:
@@ -259,10 +269,100 @@ def visualize_ND_AH_polytope(list_of_AH_polytopes,dim1, dim2, a=0.005,color=None
 
     projected_AH_polytopes = []
     for ahp in list_of_AH_polytopes:
-        projected_ahp = AH_polytope(np.dot(K, ahp.T), np.dot(K, ahp.t).reshape([-1,1]), ahp.P, ahp.color)
+        projected_ahp = AH_polytope(np.dot(K, ahp.T), np.dot(K, ahp.t).reshape([-1,1]), ahp.P, color=ahp.color, \
+                                    applied_u=ahp.applied_u, mode_string=ahp.mode_string)
         projected_AH_polytopes.append(projected_ahp)
     return visualize_2D_AH_polytope(projected_AH_polytopes, a, color, alpha, fig, ax, axis_limit, title, N, epsilon)
 
+
+def visualize_3D_AH_polytope_push_planning(list_of_AH_polytopes, sys, fig=None, ax=None, color=None, alpha=0.5, distance_scaling_array=None):
+    """
+    Visualize 3-D AH polytopes for push planning
+    """
+    if fig is None and ax is None:
+        fig = plt.figure()
+        ax=fig.add_subplot(111,projection='3d')
+    all_verts_list = []
+    for polytope in list_of_AH_polytopes:
+        if len(polytope.key_vertex) == 0:
+            H_mat = polytope.P.H
+            h_mat = polytope.P.h
+            T_mat = polytope.T
+            t_mat = polytope.t
+            key_points = []
+            if polytope.mode_string[1] == 'sticking':
+                key_points.append([0., 0., 0.])
+                key_points.append([sys.f_lim, sys.f_lim*sys.miu_slider_pusher, 0.])
+                key_points.append([sys.f_lim, -sys.f_lim*sys.miu_slider_pusher, 0.])
+                alpha_applied = alpha
+            elif polytope.mode_string[1] == 'sliding_left':
+                key_points.append([0., 0., 0.])
+                key_points.append([sys.f_lim, sys.f_lim*sys.miu_slider_pusher, 0.])
+                key_points.append([0., 0., -sys.dpsic_lim])
+                key_points.append([sys.f_lim, sys.f_lim*sys.miu_slider_pusher, -sys.dpsic_lim])
+                alpha_applied = min(1.0, 1.5*alpha)
+            elif polytope.mode_string[1] == 'sliding_right':
+                key_points.append([0., 0., 0.])
+                key_points.append([sys.f_lim, -sys.f_lim*sys.miu_slider_pusher, 0.])
+                key_points.append([0., 0., sys.dpsic_lim])
+                key_points.append([sys.f_lim, -sys.f_lim*sys.miu_slider_pusher, sys.dpsic_lim])
+                alpha_applied = min(1.0, 1.5*alpha)
+            else:
+                raise ValueError('visualize_3D_AH_polytope_push_planning: mode string {0} not recognized!'.format(polytope.mode_string))
+            key_points = np.array(key_points)
+            verts = t_mat + np.matmul(T_mat, key_points.T)
+            verts = verts.toarray().tolist()
+            all_verts_list.extend(np.array(verts).T.tolist())
+            verts_list = [list(zip(verts[0], verts[1], verts[2]))]
+            if polytope.mode_string[1] == 'sticking':
+                ax.add_collection3d(Poly3DCollection(verts_list, alpha=alpha_applied, color=color))
+            else:
+                ax.add_collection3d(Poly3DCollection(verts_list, alpha=alpha_applied, color=color, linewidth=4))
+        else:
+            if polytope.mode_string[1] == 'sticking':
+                alpha_applied = alpha
+            elif polytope.mode_string[1] == 'sliding_left':
+                alpha_applied = min(1.0, 1.5*alpha)
+            elif polytope.mode_string[1] == 'sliding_right':
+                alpha_applied = min(1.0, 1.5*alpha)
+            else:
+                raise ValueError('visualize_3D_AH_polytope_push_planning: mode string {0} not recognized!'.format(polytope.mode_string))
+            verts_array = np.array(list(polytope.key_vertex))
+            all_verts_list.extend(verts_array.tolist())
+            if len(verts_array) > 3:
+                hyper_faces = ConvexHull(verts_array).simplices
+                for face in hyper_faces:
+                    verts_list = [[
+                        [verts_array[face[0], 0], verts_array[face[0], 1], verts_array[face[0], 2]],
+                        [verts_array[face[1], 0], verts_array[face[1], 1], verts_array[face[1], 2]],
+                        [verts_array[face[2], 0], verts_array[face[2], 1], verts_array[face[2], 2]]
+                    ]]
+                    if polytope.mode_string[1] == 'sticking':
+                        ax.add_collection3d(Poly3DCollection(verts_list, alpha=alpha_applied, color=color))
+                    else:
+                        ax.add_collection3d(Poly3DCollection(verts_list, alpha=alpha_applied, color=color, linewidth=4))
+            else:
+                verts = verts_array.T.tolist()
+                verts_list = [list(zip(verts[0], verts[1], verts[2]))]
+                if polytope.mode_string[1] == 'sticking':
+                    ax.add_collection3d(Poly3DCollection(verts_list, alpha=alpha_applied, color=color))
+                else:
+                    ax.add_collection3d(Poly3DCollection(verts_list, alpha=alpha_applied, color=color, linewidth=4))
+
+    # set axis limit
+    all_verts_list = np.array(all_verts_list)
+    xmin, xmax = all_verts_list[:, 0].min(), all_verts_list[:, 0].max()
+    ymin, ymax = all_verts_list[:, 1].min(), all_verts_list[:, 1].max()
+    zmin, zmax = all_verts_list[:, 2].min(), all_verts_list[:, 2].max()
+    ax.set_xlim([xmin, xmax])
+    ax.set_ylim([ymin, ymax])
+    ax.set_zlim([zmin, zmax])
+
+    # set axis aspect
+    xyz_range = np.array([xmax - xmin, ymax - ymin, zmax - zmin])
+    ax.set_box_aspect(xyz_range*distance_scaling_array)
+
+    return fig, ax
 
 """
 The following functions involve the ax object, or the plot, as one of the arguments

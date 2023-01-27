@@ -10,7 +10,7 @@ import numpy as np
 
 from scipy.optimize import linprog as lp
 from scipy.linalg import block_diag as blk
-#from gurobipy import Model,LinExpr,QuadExpr,GRB
+from gurobipy import Model,LinExpr,QuadExpr,GRB
 
 from pypolycontain.lib.polytope import polytope,Box
 from pypolycontain.utils.utils import valuation
@@ -25,7 +25,7 @@ class AH_polytope():
         t: R^{n*1) vector: translation
     """
     # THIS USED
-    def __init__(self,T,t,P,color='r'):
+    def __init__(self,T,t,P,mode_string="",mode_consistent=False,applied_u=None,psic_range=None,key_vertex=None,color='r'):
         """
         Initilization: T,t,P. X=TP+t
         """
@@ -40,6 +40,18 @@ class AH_polytope():
         self.hash_value = 0
         self.distance_program = None
         self.color = 'r'
+        self.__name__ = "AH_polytope"
+        # FIXME: AH_polytope should contain the hybrid mode string
+        # FIXME: AH_polytope should contain the last applied input
+        self.mode_string=mode_string
+        self.mode_consistent=mode_consistent
+        self.applied_u=applied_u
+        self.psic_range=psic_range
+        if key_vertex is None:
+            self.key_vertex = set()  # empty set
+        else:
+            self.key_vertex = key_vertex
+
     def __repr__(self):
         return "AH_polytope from R^%d to R^%d"%(self.P.n,self.n)
 

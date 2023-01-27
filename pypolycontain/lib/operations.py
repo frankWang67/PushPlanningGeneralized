@@ -22,10 +22,16 @@ except:
 
 # Pypolycontain
 try:
-    from pypolycontain.lib.objects import AH_polytope,Box,hyperbox,H_polytope
+    from pypolycontain.lib.objects import Box,hyperbox,H_polytope,AH_polytope
 except:
     warnings.warn("You don't have pypolycontain properly installed. Can not execute 'import pypyplycontain'")
 
+
+# Polytope Symbolic System
+try:
+    from polytope_symbolic_system.common.utils import *
+except:
+    warnings.warn("You don't have polytope_symbolic_system properly installed. Can not execute 'import polytope_symbolic_system")
 
 
 def to_AH_polytope(P):
@@ -229,23 +235,34 @@ def _setup_program_distance_point(P,ball="infinity",solver="Gurobi",distance_sca
         infinity: L-infinity norm
         l1: l1 norm (Manhattan Distance)
         l2: l2 norm (Euclidean Distance)
+    ------
+    AH_polytope: Q={t+Tx | x \in R^p, Hx <= h} \in R^{n \cdot p}
     """
     if P.distance_program is None:
         prog=MP.MathematicalProgram()
         Q=to_AH_polytope(P)
         n=Q.n
         x=np.zeros((n,1))
+        # var: x
         P.zeta=prog.NewContinuousVariables(Q.P.H.shape[1],1,"zeta")
+        # var: delta
         delta=prog.NewContinuousVariables(n,1,"delta")
+        # constr: Hx <= h
         prog.AddLinearConstraint(A=Q.P.H,ub=Q.P.h,lb=-np.inf*np.ones((Q.P.h.shape[0],1)),vars=P.zeta)
+        # constr: Tx - delta = -t
         P.distance_constraint=prog.AddLinearEqualityConstraint( np.hstack((Q.T,-np.eye(n))),x-Q.t,np.vstack((P.zeta,delta)) )
         if ball=="infinity":
-            delta_abs=prog.NewContinuousVariables(1,1,"delta_abs")
+            # min cost=delta_abs
+            # -delta_abs * vector1 <= delta <= delta_abs * vector1
+            # vector1 = [1, 1, ..., 1]
+            delta_abs=prog.NewContinuousVariables(1,1,"delta_abs")  # delta_abs \in R, slack variable
             prog.AddBoundingBoxConstraint(0,np.inf,delta_abs)
             prog.AddLinearConstraint(np.greater_equal( np.dot(np.ones((n,1)),delta_abs),delta,dtype='object' ))
             prog.AddLinearConstraint(np.greater_equal( np.dot(np.ones((n,1)),delta_abs),-delta,dtype='object' ))
             prog.AddLinearCost(delta_abs[0,0])
         elif ball=="l1":
+            # min cost=dot(vector1,delta_abs)
+            # -delta_abs <= delta <= delta_abs (applied on each element)
             delta_abs=prog.NewContinuousVariables(n,1,"delta_abs")
             prog.AddBoundingBoxConstraint(0,np.inf,delta_abs)
             prog.AddLinearConstraint(np.greater_equal( delta_abs,delta,dtype='object' ))
@@ -253,6 +270,7 @@ def _setup_program_distance_point(P,ball="infinity",solver="Gurobi",distance_sca
             cost=np.dot(np.ones((1,n)),delta_abs)
             prog.AddLinearCost(cost[0,0])
         elif ball=="l2":
+            # min cost=dot(delta.T,diag(distance_scaling_array),delta)
             if distance_scaling_array is None:
                 distance_scaling_array = np.eye(n)
             else:
@@ -269,12 +287,14 @@ def _setup_program_distance_point(P,ball="infinity",solver="Gurobi",distance_sca
         
 def distance_point_polytope(P, x, ball="infinity", solver="Gurobi", distance_scaling_array=None):
     """
-    Computes the distance of point x from AH-polytope Q 
+    Computes the distance of point x from AH-polytope Q
+    Solve a underlying LP or QP
     """
     x_vector = np.atleast_2d(x) #in case x is not n*1 vector
     P = to_AH_polytope(P)
     if distance_scaling_array is None:
         distance_scaling_array = np.ones(x.shape[0])
+    # solve LP or QP to find the z s.t. {Hz<=h} that minimizes L_norm(x-(t+Tz)), x is the query point
     _setup_program_distance_point(P,ball,solver, distance_scaling_array)
     prog=P.distance_program
     Q=to_AH_polytope(P)
@@ -289,7 +309,9 @@ def distance_point_polytope(P, x, ball="infinity", solver="Gurobi", distance_sca
     else:
         result=MP.Solve(prog)
     if result.is_success():
+        # z s.t. Hz <= h
         zeta_num=result.GetSolution(P.zeta).reshape(P.zeta.shape[0],1)
+        # the nearest point t+Tz in the polytope
         x_nearest=np.dot(Q.T,zeta_num)+Q.t
         delta=(x_vector - x_nearest).reshape(Q.n)
         if ball=="infinity":
@@ -301,7 +323,32 @@ def distance_point_polytope(P, x, ball="infinity", solver="Gurobi", distance_sca
         else:
             raise NotImplementedError
         return d,x_nearest
+
+def distance_point_polytope_with_multiple_azimuth(polytope, query_point, ball='l2', distance_scaling_array=None, return_modifed_query_point=False):
+    """
+    Find the closest state in the polytope
+    :param polytope: the polytope
+    :param query point: the queried point, without psic
+    :param return_modifed_query_point: if true, return the modified query point
+    :return: Tuple (nearest distance, nearest point in polytope, modifed query point)
+    """
+    duplicated_states = duplicate_state_with_multiple_azimuth_angle(query_point)
+    closest_distance = np.inf
+    closest_point = None
+    modified_query_point = None
+    for i in range(len(duplicated_states)):
+        distance, projected_point = distance_point_polytope(polytope, duplicated_states[i], ball=ball, distance_scaling_array=distance_scaling_array)
+        if distance < closest_distance:
+            closest_distance = distance
+            closest_point = projected_point
+            modified_query_point = duplicated_states[i]
+            # print('new state: ', duplicated_states[i])
     
+    if return_modifed_query_point:
+        return closest_distance, closest_point, modified_query_point
+    else:
+        return closest_distance, closest_point
+
 def bounding_box(Q,solver="Gurobi"):
     Q=to_AH_polytope(Q)
     prog=MP.MathematicalProgram()
@@ -391,7 +438,8 @@ def AH_polytope_vertices(P,N=200,epsilon=0.001,solver="Gurobi"):
         else:
             raise NotImplementedError
         for i in range(N):
-            theta=i*N/2/np.pi+0.01
+            # theta=i*N/2/np.pi+0.01
+            theta = (i/N)*(2*np.pi)
             c=np.array([np.cos(theta),np.sin(theta)]).reshape(2,1)
             c_T=np.dot(c.T,Q.T)
             e=a.evaluator()
@@ -437,8 +485,49 @@ def convex_hull_of_point_and_polytope(x, Q):
     new_h=np.zeros((Q.P.h.shape[0]+2,1))
     new_h[Q.P.h.shape[0],0],new_h[Q.P.h.shape[0]+1,0]=1,0
     new_P=H_polytope(new_H,new_h)
-    return AH_polytope(new_T,new_t,new_P)
-    
+    key_vertex = Q.key_vertex
+    key_vertex.update({tuple(x.reshape(-1))})
+
+    return AH_polytope(new_T,new_t,new_P,
+                       mode_string=Q.mode_string,
+                       mode_consistent=Q.mode_consistent,
+                       applied_u=Q.applied_u,
+                       psic_range=Q.psic_range,
+                       key_vertex=key_vertex)
+
+def convex_hull_of_ah_polytopes(P1,P2):
+    """
+    Inputs:
+        P1, P2: AH_polytopes
+    Output:
+        returns :math:`\text{ConvexHull}(\mathbb{P}_1,\mathbb{P}_2)` as an AH-polytope
+    """
+    Q1 = to_AH_polytope(P1)
+    Q2 = to_AH_polytope(P2)
+    T=np.hstack((Q1.T,Q2.T,Q1.t-Q2.t ))
+    H_1 = np.hstack((Q1.P.H,np.zeros((Q1.P.H.shape[0],Q2.P.n)), -Q1.P.h ))
+    H_2 = np.hstack((np.zeros((Q2.P.H.shape[0],Q1.P.n)), Q2.P.H, Q2.P.h ))
+    H_3 = np.zeros((2, Q1.P.n + Q2.P.n + 1))
+    H_3[:,-1:] = np.array([1,-1]).reshape(2,1)
+    H = np.vstack((H_1,H_2,H_3))
+    h = np.vstack((Q1.P.h*0,Q2.P.h,1,0))
+    new_P=H_polytope(H=H, h=h)
+
+    # key points
+    key_vertex = set()
+    key_vertex.update(Q1.key_vertex)
+    key_vertex.update(Q2.key_vertex)
+
+    # mode consistency
+    assert Q1.mode_consistent == Q2.mode_consistent
+
+    return AH_polytope(T=T,t=Q2.t,P=new_P,
+                       mode_string=Q1.mode_string,
+                       mode_consistent=Q1.mode_consistent,
+                       applied_u=Q1.applied_u,
+                       psic_range=Q1.psic_range,
+                       key_vertex=key_vertex)
+
 
 def minkowski_sum(P1,P2):
     r"""
