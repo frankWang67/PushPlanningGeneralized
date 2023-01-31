@@ -5,7 +5,7 @@ from r3t.symbolic_system.symbolic_system_r3t import *
 
 
 # scene configuration
-scene_config_file = ''
+planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene.pkl'
 xmin, xmax, ymin, ymax, thetamin, thetamax = 0.0, 0.5, 0.0, 0.5, -np.pi, np.pi
 search_space_dimensions = np.array([(xmin, xmax), (ymin, ymax), (thetamin, thetamax)])
 # state_space_obstacles = MultiPolygon()  # empty obstacles
@@ -25,14 +25,19 @@ nonlinear_dynamics_time_step = 0.01
 max_planning_time = 100.0
 max_nodes_in_tree = 1000
 goal_tolerance = 0.001
-goal_sampling_bias = 0.01  # take sample from goal
+goal_sampling_bias = 0.02  # take sample from goal
 mode_consistent_sampling_bias = 0.5  # keey dynamic mode consistent (invariant contact face)
 distance_scaling_array = np.array([1.0, 1.0, 0.0695])
 quad_cost_state = np.diag([1.0, 1.0, 0.0695])
 # quad_cost_input = np.diag([0.01, 0.01, 0.])
 quad_cost_input = np.diag([0.001, 0.001, 5e-6])
-x_init = [0.15, 0.05, 0.]
-x_goal = [0.40, 0.30, 0.25*np.pi]
+
+# x_init = [0.15, 0.05, 0.]
+# x_goal = [0.40, 0.30, 0.25*np.pi]
+
+x_init = [0.25, 0.05, 0.5*np.pi]
+x_goal = [0.25, 0.45, 0.5*np.pi]
+
 psic_init = np.pi
 
 # underlying functions
@@ -60,25 +65,48 @@ planning_dyn = PushDTHybridSystem(f_lim=force_limit,
                                   reachable_set_time_step=reachable_set_time_step,
                                   nldynamics_time_step=nonlinear_dynamics_time_step)
 
-planner = SymbolicSystem_Hybrid_R3T(init_state=np.append(x_init, psic_init),
-                                    sys=planning_dyn,
-                                    sampler=sampler,
-                                    goal_sampling_bias=goal_sampling_bias,
-                                    mode_consistent_sampling_bias=mode_consistent_sampling_bias,
-                                    step_size=reachable_set_time_step,
-                                    contains_goal_function=None,
-                                    cost_to_go_function=cost_to_go,
-                                    distance_scaling_array=distance_scaling_array,
-                                    compute_reachable_set=None,
-                                    use_true_reachable_set=False,
-                                    nonlinear_dynamic_step_size=nonlinear_dynamics_time_step,
-                                    use_convex_hull=True,
-                                    goal_tolerance=goal_tolerance)
+# --------------------------------------------------
+# General Hybrid R3T Algorithm
+# --------------------------------------------------
+
+# planner = SymbolicSystem_Hybrid_R3T(init_state=np.append(x_init, psic_init),
+#                                     sys=planning_dyn,
+#                                     sampler=sampler,
+#                                     goal_sampling_bias=goal_sampling_bias,
+#                                     mode_consistent_sampling_bias=mode_consistent_sampling_bias,
+#                                     step_size=reachable_set_time_step,
+#                                     contains_goal_function=None,
+#                                     cost_to_go_function=cost_to_go,
+#                                     distance_scaling_array=distance_scaling_array,
+#                                     compute_reachable_set=None,
+#                                     use_true_reachable_set=False,
+#                                     nonlinear_dynamic_step_size=nonlinear_dynamics_time_step,
+#                                     use_convex_hull=True,
+#                                     goal_tolerance=goal_tolerance)
+
+# --------------------------------------------------
+# Contact-Aware Hybrid R3T Algorithm
+# --------------------------------------------------
+planner = SymbolicSystem_Hybrid_R3T_Contact(init_state=np.append(x_init, psic_init),
+                                            sys=planning_dyn,
+                                            sampler=sampler,
+                                            goal_sampling_bias=goal_sampling_bias,
+                                            mode_consistent_sampling_bias=mode_consistent_sampling_bias,
+                                            step_size=reachable_set_time_step,
+                                            planning_scene_pkl=planning_scene_pkl,
+                                            contains_goal_function=None,
+                                            cost_to_go_function=cost_to_go,
+                                            distance_scaling_array=distance_scaling_array,
+                                            compute_reachable_set=None,
+                                            use_true_reachable_set=False,
+                                            nonlinear_dynamic_step_size=nonlinear_dynamics_time_step,
+                                            use_convex_hull=True,
+                                            goal_tolerance=goal_tolerance)
 
 success, goal_node = planner.build_tree_to_goal_state(goal_state=np.array(x_goal),
                                                       allocated_time=max_planning_time,
                                                       stop_on_first_reach=False,
-                                                      rewire=True,
+                                                      rewire=False,
                                                       explore_deterministic_next_state=False,
                                                       max_nodes_to_add=max_nodes_in_tree,
                                                       Z_obs_list=state_space_obstacles)

@@ -1,5 +1,6 @@
 import pydrake
 from r3t.common.r3t import *
+from r3t.common.r3t_contact import *
 from polytope_symbolic_system.common.symbolic_system import *
 from polytope_symbolic_system.common.utils import *
 from pypolycontain.lib.operations import distance_point_polytope, distance_point_polytope_with_multiple_azimuth
@@ -245,7 +246,8 @@ class PolytopeReachableSet(ReachableSet):
         else:
             return np.ndarray.flatten(closest_point), False, np.asarray([self.parent_state, np.ndarray.flatten(closest_point)])
 
-    def find_closest_state_with_hybrid_dynamics(self, query_point, save_true_dynamics_path=False, Z_obs_list:MultiPolygon=None, duplicate_search_azimuth=False):
+    def find_closest_state_with_hybrid_dynamics(self, query_point, save_true_dynamics_path=False, Z_obs_list:MultiPolygon=None,
+                                                    duplicate_search_azimuth=False, slider_in_contact=False):
         """
         Find the closest state in the polytopes with hybrid dynamics
         :param query_point: the queried point, without psic
@@ -253,6 +255,8 @@ class PolytopeReachableSet(ReachableSet):
                                        if false, save only the start point (parent_state) and end point (nearest_point) 
         :param Z_obs_list: shapely.geometry.MultiPolygon object, including all obstacles
         :param duplicate_search_azimuth: if true, query multiple points with theta, theta-2pi, theta+2pi
+        :param slider_in_contact: if true, return contact_mode_consistent polytope with probability=0.5, and
+                                           return nearest polytope with probability=0.5
         :return: Tuple (nearest_point, flag (whether the nearest_point is close enough to parent_state), states traversed from start point to end point (with psic), closest_polytope)
         """
         # initialize the closest point to query_point, the corresponding minimum distance and the polytope of it
@@ -260,7 +264,9 @@ class PolytopeReachableSet(ReachableSet):
         closest_point = None
         closest_polytope = None
 
-        if np.random.rand() <= self.mode_consistent_sampling_bias:
+        if (not slider_in_contact and np.random.rand() <= self.mode_consistent_sampling_bias) or \
+            (slider_in_contact and np.random.rand() <= 0.5):
+            # find the mode consistent polytope (to prevent contact face switch)
             for polytope in self.polytope_list:
                 if polytope.mode_consistent:
                     min_distance, closest_point = distance_point_polytope_with_multiple_azimuth(polytope,
@@ -887,9 +893,10 @@ class SymbolicSystem_R3T(R3T):
 
 
 class SymbolicSystem_Hybrid_R3T(R3T_Hybrid):
-    def __init__(self, init_state, sys:PushDTHybridSystem, sampler, \
-                 goal_sampling_bias, mode_consistent_sampling_bias, \
-                 step_size, contains_goal_function = None, cost_to_go_function=None, \
+    def __init__(self, init_state, sys:PushDTHybridSystem, \
+                 sampler, goal_sampling_bias, mode_consistent_sampling_bias, \
+                 step_size, \
+                 contains_goal_function = None, cost_to_go_function=None, \
                  distance_scaling_array = None, \
                  compute_reachable_set=None, use_true_reachable_set=False, \
                  nonlinear_dynamic_step_size=1e-2, use_convex_hull=True, goal_tolerance = 1e-3):
@@ -938,9 +945,75 @@ class SymbolicSystem_Hybrid_R3T(R3T_Hybrid):
                                   compute_reachable_set=compute_reachable_set,
                                   sampler=sampler,
                                   goal_sampling_bias=goal_sampling_bias,
-                                  mode_consistent_sampling_bias=mode_consistent_sampling_bias,
                                   distance_scaling_array=distance_scaling_array,
                                   reachable_set_tree_class=PolytopeReachableSetTree,
                                   state_tree_class=SymbolicSystem_StateTree,
                                   path_class=PolytopePath,
                                   dim_u=self.sys.dim_u)
+
+class SymbolicSystem_Hybrid_R3T_Contact(R3T_Hybrid_Contact):
+    def __init__(self, init_state, sys:PushDTHybridSystem, \
+                 sampler, goal_sampling_bias, mode_consistent_sampling_bias, \
+                 step_size, \
+                 planning_scene_pkl = None, \
+                 contains_goal_function = None, cost_to_go_function=None, \
+                 distance_scaling_array = None, \
+                 compute_reachable_set=None, use_true_reachable_set=False, \
+                 nonlinear_dynamic_step_size=1e-2, use_convex_hull=True, goal_tolerance = 1e-3):
+        self.init_state = init_state
+        self.sys = sys
+        self.planning_scene_pkl = planning_scene_pkl
+        self.step_size = step_size
+        self.contains_goal_function = contains_goal_function
+        self.distance_scaling_array = distance_scaling_array
+        self.cost_to_go_function = cost_to_go_function
+        self.goal_tolerance = goal_tolerance
+        if compute_reachable_set is None:
+            def compute_reachable_set(state, u):
+                '''
+                Compute polytopic reachable set using the system
+                :param state: nominal state, with psic, linearization point
+                :param u: nominal input, linearization point
+                :return: PolytopeReachableSet object
+                '''
+                deterministic_next_state = None
+                # GET REACHABLE POLYTOPES
+                # reachable_set_polytope = self.sys.get_reachable_polytopes(state, u, step_size=self.step_size, use_convex_hull=use_convex_hull)
+                reachable_set_polytope = self.sys.get_reachable_polytopes_with_variable_psic(state, u, step_size=self.step_size, use_convex_hull=use_convex_hull)
+                # QUASI-STATIC ASSUMPTION
+                if np.all(u == 0):
+                    if use_true_reachable_set:
+                        deterministic_next_state=[state]
+                        for step in range(round(self.step_size / nonlinear_dynamic_step_size)):
+                            deterministic_next_state.append(state)
+                    else:
+                        deterministic_next_state = [state, state]
+                return PolytopeReachableSet(parent_state=state,
+                                            polytope_list=reachable_set_polytope,
+                                            sys=self.sys,
+                                            epsilon=goal_tolerance,
+                                            contains_goal_function=self.contains_goal_function,
+                                            cost_to_go_function=self.cost_to_go_function,
+                                            mode_consistent_sampling_bias=mode_consistent_sampling_bias,
+                                            distance_scaling_array=self.distance_scaling_array,
+                                            deterministic_next_state=deterministic_next_state,
+                                            use_true_reachable_set=use_true_reachable_set,
+                                            reachable_set_step_size=self.step_size,
+                                            nonlinear_dynamic_step_size=nonlinear_dynamic_step_size)
+            self.compute_reachable_set_func = compute_reachable_set
+
+        try:
+            assert self.planning_scene_pkl is not None
+        except:
+            print('SymbolicSystem_Hybrid_R3T: planning scene file is not provided!')
+
+        R3T_Hybrid_Contact.__init__(self, root_state=init_state,
+                                    planning_scene_pkl=self.planning_scene_pkl,
+                                    compute_reachable_set=compute_reachable_set,
+                                    sampler=sampler,
+                                    goal_sampling_bias=goal_sampling_bias,
+                                    distance_scaling_array=distance_scaling_array,
+                                    reachable_set_tree_class=PolytopeReachableSetTree,
+                                    state_tree_class=SymbolicSystem_StateTree,
+                                    path_class=PolytopePath,
+                                    dim_u=self.sys.dim_u)

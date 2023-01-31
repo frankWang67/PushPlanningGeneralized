@@ -11,16 +11,23 @@ def restrict_angle_in_unit_circle(angle):
     """
     return -np.pi + (angle - (-np.pi)) % (2*np.pi)
 
-def gen_polygon(coord, geom):
+def gen_polygon(coord, geom, type='box'):
     """
     Return the shapely.Polygon object of (x, y, theta)
     :param coord: (x, y, theta) coordinates
     :param beta: (xl, yl) geometry
+    :param type: 'box', 'polygon'
     :return: Polygon
     """
     x, y, theta = coord
-    xl, yl = geom
-    poly = Polygon([(0.5*xl, 0.5*yl), (-0.5*xl, 0.5*yl), (-0.5*xl, -0.5*yl), (0.5*xl, -0.5*yl), (0.5*xl, 0.5*yl)])
+
+    if type == 'box':
+        xl, yl = geom
+        poly = Polygon([(0.5*xl, 0.5*yl), (-0.5*xl, 0.5*yl), (-0.5*xl, -0.5*yl), (0.5*xl, -0.5*yl), (0.5*xl, 0.5*yl)])
+    elif type == 'polygon':
+        # geom => 2d coordinates of vertex, in order, does not matter if the line ring is not closed
+        poly = Polygon(geom)
+    
     poly = affinity.rotate(poly, theta, origin='center', use_radians=True)
     poly = affinity.translate(poly, x, y)
     
@@ -58,3 +65,38 @@ def matrix_mult(matrix_list):
     for matrix in matrix_list:
         result = np.matmul(result, matrix)
     return result
+
+def rotation_matrix(theta):
+    """
+    Return the rotation matrix CCW
+    :param theta: rotation angle
+    :return: 2X2 rotation matrix
+    """
+    mat = np.array([[np.cos(theta), -np.sin(theta)],
+                    [np.sin(theta), np.cos(theta)]])
+    return mat
+
+def normalize(vector):
+    """
+    Normalize a vector
+    :param vector: the vector
+    :return: the normalized vector
+    """
+    return vector/np.linalg.norm(vector,ord=2)
+
+def vector_included_angle(vec1, vec2):
+    """
+    Get the included angle of vectors
+    :param vec1: the vector 1
+    :param vec2: the vector 2
+    :return: angle [0,pi]
+    """
+    return np.arccos(np.dot(vec1,vec2)/(np.linalg.norm(vec1,ord=2)*np.linalg.norm(vec2,ord=2)))
+
+def get_vector_azimuth_angle(vec):
+    """
+    Get the azimuth angle of vector
+    :param vec: the vector
+    :return: the azimuth angle
+    """
+    return np.arctan2(vec[1],vec[0])
