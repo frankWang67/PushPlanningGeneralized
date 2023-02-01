@@ -168,10 +168,10 @@ def visualize_scene(scene:PlanningScene, fig=None, ax=None, alpha=1.0):
 
     cmap = plt.cm.Pastel2
     for idx, polygon in enumerate(scene.polygons):
-        obs_patch = patches.Polygon(np.array(polygon.exterior.coords.xy).T, color=cmap(idx), alpha=alpha)
+        obs_patch = patches.Polygon(np.array(polygon.exterior.coords.xy).T, facecolor=cmap(idx), alpha=alpha, edgecolor='black')
         ax.add_artist(obs_patch)
 
-    target_patch = patches.Polygon(np.array(scene.target_polygon.exterior.coords.xy).T, color='#1f77b4', alpha=alpha)
+    target_patch = patches.Polygon(np.array(scene.target_polygon.exterior.coords.xy).T, facecolor='#1f77b4', alpha=alpha, edgecolor='black')
     ax.add_patch(target_patch)
 
     plt.xlim([0.0, 0.5])
@@ -182,22 +182,37 @@ def visualize_scene(scene:PlanningScene, fig=None, ax=None, alpha=1.0):
     return fig, ax    
 
 if __name__ == '__main__':
+    ## -------------------------------------------------
+    ## SETTINGS
+    ## -------------------------------------------------
     """
-    pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene.pkl'
+    # Planning Scene Unit Test
+    # --------------------------------------------------
     # # x_init = [0.25, 0.05, 0.5*np.pi]
     # x_init = [0.18, 0.16, 0.1*np.pi+0.01]
-    x_init = [0.25, 0.05, 0.5*np.pi]
-    num_obs = 3
+    # x_init = [0.32, 0.13, 0.1*np.pi+0.01]
 
+    # R3T-Contact Test
+    # --------------------------------------------------
+    x_init = [0.25, 0.05, 0.5*np.pi]
+
+    # obstacle settings
+    # --------------------------------------------------
+    num_obs = 3
     x_obs = [[0.1, 0.25, 0.6*np.pi],
              [0.25, 0.25, 0.4*np.pi],
              [0.4, 0.25, 0.6*np.pi]]
-
     # x_obs = [[0.25, 0.25, 0.4*np.pi],
     #          [0.4, 0.25, 0.6*np.pi]]
 
+    # other settings
+    # --------------------------------------------------
     miu_default = 0.3
     geom_default = [0.07, 0.12]  # box
+
+    # create planning scene and save to file
+    # --------------------------------------------------
+    pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene.pkl'
 
     __geom = cs.SX.sym('geom', 2)
     __c = rect_cs(__geom[0], __geom[1])/(__geom[0]*__geom[1])
@@ -219,9 +234,28 @@ if __name__ == '__main__':
     scene, basic = load_planning_scene_from_file(pkl_file)
     fig, ax = visualize_scene(scene, alpha=0.25)
     plt.show()
-    
+    """
+
+    ## -------------------------------------------------
+    ## TEST UPDATE CONTACT CONFIGURATION
+    ## -------------------------------------------------
+
+    contact_config = pickle.load(open('/home/yongpeng/research/R3T_shared/data/debug/contact_config.pkl', 'rb'))
+    target_state = np.load('/home/yongpeng/research/R3T_shared/data/debug/target_state.npy')
+    contact_config[2]['obstacle']['x'] = [0.4, 0.25, 0.6*np.pi]
+    contact_config[2]['obstacle']['polygon'] = gen_polygon(contact_config[2]['obstacle']['x'], [0.07, 0.12], 'box')
+    contact_config[2]['obstacle']['abs_p']
+    import pdb; pdb.set_trace()
+    new_contact_config = update_contact_configuration(target_state, contact_config)
+
     exit(0)
 
+    ## -------------------------------------------------
+    ## TEST FORWARD SIMULATION
+    ## -------------------------------------------------
+
+    # move forward
+    # --------------------------------------------------
     displacement = np.append(0.3*0.05*np.array([np.cos(x_init[2]+0.5*np.pi), np.sin(x_init[2]+0.5*np.pi)]), 0.) / 5
     
     ## ROUND 1
@@ -257,27 +291,27 @@ if __name__ == '__main__':
     print('can extend: ', can_extend_flag)
     fig, ax = visualize_scene(new_scene, fig, ax, alpha=0.25)
 
-    # ## ROUND 4
-    # state_list = []
-    # for i in range(12, 17):
-    #     state_list.append(x_init+i*displacement)
-    # state_list = np.array(state_list)
-    # in_contact_flag, can_extend_flag, new_scene = \
-    #     collision_check_and_contact_reconfig(basic, new_scene, state_list)
-    # print('in contact: ', in_contact_flag)
-    # print('can extend: ', can_extend_flag)
-    # fig, ax = visualize_scene(new_scene, fig, ax, alpha=0.25)
+    ## ROUND 4
+    state_list = []
+    for i in range(12, 17):
+        state_list.append(x_init+i*displacement)
+    state_list = np.array(state_list)
+    in_contact_flag, can_extend_flag, new_scene = \
+        collision_check_and_contact_reconfig(basic, new_scene, state_list)
+    print('in contact: ', in_contact_flag)
+    print('can extend: ', can_extend_flag)
+    fig, ax = visualize_scene(new_scene, fig, ax, alpha=0.25)
 
-    # ## ROUND 5
-    # state_list = []
-    # for i in range(16, 21):
-    #     state_list.append(x_init+i*displacement)
-    # state_list = np.array(state_list)
-    # in_contact_flag, can_extend_flag, new_scene = \
-    #     collision_check_and_contact_reconfig(basic, new_scene, state_list)
-    # print('in contact: ', in_contact_flag)
-    # print('can extend: ', can_extend_flag)
-    # fig, ax = visualize_scene(new_scene, fig, ax, alpha=0.25)
+    ## ROUND 5
+    state_list = []
+    for i in range(16, 21):
+        state_list.append(x_init+i*displacement)
+    state_list = np.array(state_list)
+    in_contact_flag, can_extend_flag, new_scene = \
+        collision_check_and_contact_reconfig(basic, new_scene, state_list)
+    print('in contact: ', in_contact_flag)
+    print('can extend: ', can_extend_flag)
+    fig, ax = visualize_scene(new_scene, fig, ax, alpha=0.25)
 
     # ## ROUND 6
     # state_list = []
@@ -330,10 +364,12 @@ if __name__ == '__main__':
     # print('can extend: ', can_extend_flag)
     # fig, ax = visualize_scene(new_scene, fig, ax, alpha=0.25)
 
-    # ## GO RIGHT
+    # move right
+    # --------------------------------------------------
+    displacement2 = np.append(0.3*0.05*np.array([np.cos(x_init[2]), np.sin(x_init[2])]), 0.) / 5
+
     x_state_now = state_list[-1, :]
     state_list = []
-    displacement2 = np.append(0.3*0.05*np.array([np.cos(x_init[2]), np.sin(x_init[2])]), 0.) / 5
     for i in range(0, 5):
         state_list.append(x_state_now+i*displacement2)
     state_list = np.array(state_list)
@@ -402,28 +438,30 @@ if __name__ == '__main__':
     # print('in contact: ', in_contact_flag)
     # print('can extend: ', can_extend_flag)
 
-    ## GO FRONT
+    # move forward again
+    # --------------------------------------------------
 
     # ## ROUND 7
-    # state_list = []
-    # for i in range(24, 29):
-    #     state_list.append(x_init+i*displacement)
-    # state_list = np.array(state_list)
-    # in_contact_flag, can_extend_flag, new_scene = \
-    #     collision_check_and_contact_reconfig(basic, new_scene, state_list)
-    # print('in contact: ', in_contact_flag)
-    # print('can extend: ', can_extend_flag)
-    # fig, ax = visualize_scene(new_scene, fig, ax, alpha=0.25)
+    x_state_now = state_list[-1, :]
+    state_list = []
+    for i in range(0, 5):
+        state_list.append(x_state_now+i*displacement)
+    state_list = np.array(state_list)
+    in_contact_flag, can_extend_flag, new_scene = \
+        collision_check_and_contact_reconfig(basic, new_scene, state_list)
+    print('in contact: ', in_contact_flag)
+    print('can extend: ', can_extend_flag)
+    fig, ax = visualize_scene(new_scene, fig, ax, alpha=0.25)
 
     # ## ROUND 8
-    # state_list = []
-    # for i in range(28, 33):
-    #     state_list.append(x_init+i*displacement)
-    # state_list = np.array(state_list)
-    # in_contact_flag, can_extend_flag, new_scene = \
-    #     collision_check_and_contact_reconfig(basic, new_scene, state_list)
-    # print('in contact: ', in_contact_flag)
-    # print('can extend: ', can_extend_flag)
+    state_list = []
+    for i in range(4, 9):
+        state_list.append(x_state_now+i*displacement)
+    state_list = np.array(state_list)
+    in_contact_flag, can_extend_flag, new_scene = \
+        collision_check_and_contact_reconfig(basic, new_scene, state_list)
+    print('in contact: ', in_contact_flag)
+    print('can extend: ', can_extend_flag)
     # fig, ax = visualize_scene(new_scene, fig, ax, alpha=0.25)
 
     # ## ROUND 9
@@ -435,13 +473,14 @@ if __name__ == '__main__':
     #     collision_check_and_contact_reconfig(basic, new_scene, state_list)
     # print('in contact: ', in_contact_flag)
     # print('can extend: ', can_extend_flag)
-    fig, ax = visualize_scene(new_scene, fig, ax)
+    fig, ax = visualize_scene(new_scene, fig, ax, alpha=0.5)
 
     plt.show()
-    """
 
-
+    ## --------------------------------------------------------
     ## TEST CONTACT LOCATION DETECTOR
+    ## --------------------------------------------------------
+
     # sp = Polygon([[1,0],[0,1],[-1,0],[0,-1],[1,0]])
 
     # mp0 = Polygon([[0.0,1],[1.0,1],[1.0,2],[0.0,2],[0.0,1]])
@@ -456,37 +495,37 @@ if __name__ == '__main__':
     # mp0 = Polygon([[1.0,0.5],[1.5,1.0],[1.0,1.5],[0.5,1.0],[1.0,0.5]])
     # mp1 = Polygon([[1.0,-0.5],[0.5,-1.0],[1.0,-1.5],[1.5,-1.0],[1.0,-0.5]])
 
-    sp = gen_polygon(np.array([0.25, 0.25, 1.2566370614359172]), [0.07, 0.12], 'box')
-    mp0 = gen_polygon(np.array([0.24647304, 0.17610421, 1.27488887]), [0.07, 0.12], 'box')
-    mp1 = gen_polygon(np.array([0.24961313, 0.19094834, 1.20993865]), [0.07, 0.12], 'box')
+    # sp = gen_polygon(np.array([0.25, 0.25, 1.2566370614359172]), [0.07, 0.12], 'box')
+    # mp0 = gen_polygon(np.array([0.24647304, 0.17610421, 1.27488887]), [0.07, 0.12], 'box')
+    # mp1 = gen_polygon(np.array([0.24961313, 0.19094834, 1.20993865]), [0.07, 0.12], 'box')
 
-    scene0 = PlanningScene(target_polygon=sp, polygons=[mp0])
-    scene1 = PlanningScene(target_polygon=sp, polygons=[mp1])
-    # m_state_list = np.linspace(np.append(np.array(mp0.centroid.xy), 0.), np.append(np.array(mp1.centroid.xy), 0.5*np.pi), 100)
+    # scene0 = PlanningScene(target_polygon=sp, polygons=[mp0])
+    # scene1 = PlanningScene(target_polygon=sp, polygons=[mp1])
+    # # m_state_list = np.linspace(np.append(np.array(mp0.centroid.xy), 0.), np.append(np.array(mp1.centroid.xy), 0.5*np.pi), 100)
     
-    m_state_list = np.array([[0.24647304, 0.17610421, 1.27488887],
-                             [0.24703759, 0.17908619, 1.26651328],
-                             [0.2476271 , 0.18206334, 1.25583671],
-                             [0.24824836, 0.18503403, 1.242855  ],
-                             [0.24890813, 0.1879964 , 1.22755984],
-                             [0.24961313, 0.19094834, 1.20993865]])
+    # m_state_list = np.array([[0.24647304, 0.17610421, 1.27488887],
+    #                          [0.24703759, 0.17908619, 1.26651328],
+    #                          [0.2476271 , 0.18206334, 1.25583671],
+    #                          [0.24824836, 0.18503403, 1.242855  ],
+    #                          [0.24890813, 0.1879964 , 1.22755984],
+    #                          [0.24961313, 0.19094834, 1.20993865]])
 
-    s_state = np.array([0.25, 0.25, 1.2566370614359172])
+    # s_state = np.array([0.25, 0.25, 1.2566370614359172])
     
-    # s_state = np.array([0, 0, 0])
-    m_coll_point, s_coll_point = contact_location_detector(m_state_list, mp0, s_state, sp)
-    import pdb; pdb.set_trace()
+    # # s_state = np.array([0, 0, 0])
+    # m_coll_point, s_coll_point = contact_location_detector(m_state_list, mp0, s_state, sp)
+    # import pdb; pdb.set_trace()
 
-    fig, ax = visualize_scene(scene0, alpha=0.25)
-    visualize_scene(scene1, fig, ax, alpha=0.5)
+    # fig, ax = visualize_scene(scene0, alpha=0.25)
+    # visualize_scene(scene1, fig, ax, alpha=0.5)
 
-    m_coll_point = np.array(m_coll_point).reshape(-1)
-    s_coll_point = np.array(s_coll_point).reshape(-1)
+    # m_coll_point = np.array(m_coll_point).reshape(-1)
+    # s_coll_point = np.array(s_coll_point).reshape(-1)
 
-    m_coll_point = m_state_list[0,:2] + rotation_matrix(m_state_list[0,2])@m_coll_point
-    s_coll_point = s_state[:2] + rotation_matrix(s_state[2])@s_coll_point
+    # m_coll_point = m_state_list[0,:2] + rotation_matrix(m_state_list[0,2])@m_coll_point
+    # s_coll_point = s_state[:2] + rotation_matrix(s_state[2])@s_coll_point
 
-    ax.scatter(m_coll_point[0], m_coll_point[1])
-    ax.scatter(s_coll_point[0], s_coll_point[1])
+    # ax.scatter(m_coll_point[0], m_coll_point[1])
+    # ax.scatter(s_coll_point[0], s_coll_point[1])
 
-    plt.show()
+    # plt.show()

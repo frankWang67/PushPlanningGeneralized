@@ -1,3 +1,14 @@
+# --------------------------------------------------
+# Test Pushing With R3T
+# --------------------------------------------------
+
+# --------------------------------------------------
+# Ignore warnings
+# --------------------------------------------------
+
+import warnings
+warnings.filterwarnings("ignore")
+
 import numpy as np
 
 from polytope_symbolic_system.common.symbolic_system import *

@@ -254,10 +254,19 @@ class R3T_Hybrid_Contact:
             return False, None, error_code
 
         # collision check and contact reconfiguration (planning with contact)
-        in_contact_flag, can_extend_flag, new_planning_scene = \
-            collision_check_and_contact_reconfig(basic=self.contact_basic,
-                                                 scene=nearest_node.planning_scene,
-                                                 state_list=path)
+        try:
+            in_contact_flag, can_extend_flag, new_planning_scene = \
+                collision_check_and_contact_reconfig(basic=self.contact_basic,
+                                                    scene=nearest_node.planning_scene,
+                                                    state_list=path)
+        except Exception as e:
+            print('R3T_Hybrid: caught exeption %s' % e)
+            import pdb; pdb.set_trace()
+            in_contact_flag, can_extend_flag, new_planning_scene = \
+                collision_check_and_contact_reconfig(basic=self.contact_basic,
+                                                    scene=nearest_node.planning_scene,
+                                                    state_list=path)
+            pass
 
         # indirect collision, uncontrollable, discard without extension
         if not can_extend_flag:
@@ -304,6 +313,7 @@ class R3T_Hybrid_Contact:
                  The goal node as a Node object. If no path is found, None is returned. self.goal_node is set to the return value after running.
         '''
         #TODO: Timeout and other termination functionalities
+        import pdb; pdb.set_trace()
         start = default_timer()
         # state: (x, y, theta), without psic
         self.goal_state = goal_state
@@ -401,6 +411,7 @@ class R3T_Hybrid_Contact:
 
                 except Exception as e:
                     print('R3T_Hybrid: caught exeption %s' % e)
+                    import pdb; pdb.set_trace()
                     is_extended = False
 
                 if not is_extended:

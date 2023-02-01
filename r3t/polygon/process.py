@@ -1,7 +1,7 @@
 import casadi as cs
 from qpsolvers import solve_qp
 from scipy.sparse import csc_matrix
-from shapely.geometry import MultiPolygon, Point
+from shapely.geometry import MultiPolygon, Point, MultiLineString
 from shapely.ops import nearest_points, unary_union
 from shapely import affinity, intersects, intersection, distance
 
@@ -37,7 +37,7 @@ def get_polygon_in_collision(target_state, target_poly, state_of_poly, list_of_p
     num_coll_poly = 0
     coll_poly, coll_state = [], []
     for poly, state in zip(list_of_poly, state_of_poly):
-        if intersects(poly, target_poly_future):
+        if intersection(poly, target_poly_future).area >= TOL:
             coll_poly.append(poly)
             coll_state.append(state)
             num_coll_poly += 1
@@ -136,6 +136,8 @@ def contact_location_detector(m_states, m_poly, s_states, s_poly):
                 continue
             if isinstance(point, LineString):
                 point = Point(np.array(point.xy).T[0])
+            if isinstance(point, MultiLineString):
+                point = Point(np.array(point.geoms[0].xy).T[0])
             coll_dist = line.line_locate_point(point)/line.length
             if coll_dist < early_coll_dist:
                 early_coll_dist = coll_dist
@@ -151,6 +153,8 @@ def contact_location_detector(m_states, m_poly, s_states, s_poly):
                 continue
             if isinstance(point, LineString):
                 point = Point(np.array(point.xy).T[0])
+            if isinstance(point, MultiLineString):
+                point = Point(np.array(point.geoms[0].xy).T[0])
             coll_dist = line.line_locate_point(point)/line.length
             if coll_dist < early_coll_dist:
                 early_coll_dist = coll_dist
@@ -318,7 +322,7 @@ def update_contact_configuration(target_state, contact_config):
 
         # solve contact force and velocity
         f = qp['x'][:3]  # (fn, ft+, ft-)
-        print('complementary variable Mx+q: ', M@qp['x']+q)
+        # print('complementary variable Mx+q: ', M@qp['x']+q)
 
         # (fn, ft) in {world}
         if edge_on_which == 'target':
@@ -360,9 +364,6 @@ def update_contact_configuration(target_state, contact_config):
         dx_o = config['obstacle']['x'] - old_obstacle_x
 
         if penetration_flag:
-            # clear dx_o
-            dx_o = None
-
             target_poly_in_collision = gen_polygon(config['target']['x'], config['target']['geom'], 'box')
             obstacle_poly_in_collision = gen_polygon(config['obstacle']['x'], config['obstacle']['geom'], 'box')
             candidate_contact_point = []
@@ -376,15 +377,19 @@ def update_contact_configuration(target_state, contact_config):
             # select new contact point
             if len(candidate_contact_point) == 0:
                 raise RuntimeError('No proper contect point to be selected!')
-            for point in candidate_contact_point:
-                new_obstacle_poly = affinity.rotate(obstacle_poly_in_collision, np.sign(dtheta_o)*np.abs(dtheta_o-dtheta_lim), Point(point), use_radians=True)
-                if intersection(target_poly_in_collision, 
-                                new_obstacle_poly).area <= TOL:
-                    config['obstacle']['x'] = np.append(np.array(new_obstacle_poly.centroid.coords).reshape(-1), old_obstacle_x[2]+dtheta_o)
-                    dx_o = config['obstacle']['x'] - old_obstacle_x
+            else:
+                # clear dx_o
+                dx_o = None
+                for point in candidate_contact_point:
+                    # new_obstacle_poly = affinity.rotate(obstacle_poly_in_collision, np.sign(dtheta_o)*np.abs(dtheta_o-dtheta_lim), Point(point), use_radians=True)
+                    new_obstacle_poly = affinity.rotate(obstacle_poly_in_collision, dtheta_o-dtheta_lim, Point(point), use_radians=True)
+                    if intersection(target_poly_in_collision, 
+                                    new_obstacle_poly).area <= TOL:
+                        config['obstacle']['x'] = np.append(np.array(new_obstacle_poly.centroid.coords).reshape(-1), old_obstacle_x[2]+dtheta_o)
+                        dx_o = config['obstacle']['x'] - old_obstacle_x
 
-            if dx_o is None:
-                import pdb; pdb.set_trace()
+                if dx_o is None:
+                    import pdb; pdb.set_trace()
         
         ## FOR DEBUG
         if intersection(gen_polygon(config['target']['x'], config['target']['geom'], 'box'), \
@@ -425,14 +430,21 @@ def handle_possible_penetration(contact_config):
                                                          edge_on_which='obstacle')
 
     # detect penetration
+    # FIXME: possible bugs when target and obstacle polygons are in penetration at first
     dtheta = contact_config['obstacle']['dtheta']
     if min(angle1, angle2) <= dtheta <= max(angle1, angle2):
         return False, dtheta
     else:
-        if dtheta >= 0:
-            return True, max(angle1, angle2)
+        if (min(angle1, angle2) <= 0) and (max(angle1, angle2) >= 0):
+            if dtheta >= 0:
+                return True, max(angle1, angle2)
+            else:
+                return True, min(angle1, angle2)
         else:
-            return True, min(angle1, angle2)
+            if (min(angle1, angle2) <= 0) and (max(angle1, angle2) <= 0):
+                return True, -min(abs(angle1), abs(angle2))
+            else:
+                return True, min(abs(angle1), abs(angle2))
 
 ## ---------------------------------------------------
 ## DEPRECATED FUNCTIONS
