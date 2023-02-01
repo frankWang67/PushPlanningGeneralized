@@ -376,7 +376,8 @@ def update_contact_configuration(target_state, contact_config):
                     candidate_contact_point.append(vertex)
             # select new contact point
             if len(candidate_contact_point) == 0:
-                raise RuntimeError('No proper contect point to be selected!')
+                # raise RuntimeError('No proper contect point to be selected!')
+                pass
             else:
                 # clear dx_o
                 dx_o = None

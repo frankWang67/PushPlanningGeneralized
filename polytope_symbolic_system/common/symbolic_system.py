@@ -1686,3 +1686,34 @@ if __name__ == '__main__':
     ## ----------------------------------------------------
 
     ## TEST-10 (PolytopeReachableSet.contains, PolytopeReachableSet.contains_goal)
+    root_state = np.array([0.25, 0.05, 0.5*np.pi, 1.0*np.pi])
+    goal_state = np.array([0.25, 0.45, 0.5*np.pi])
+    empty_input = np.zeros(3,)
+    plan_step_size = 0.05
+    sim_step_size = 0.01
+
+    polytope_list = dyn.get_reachable_polytopes_with_variable_psic(root_state, empty_input, plan_step_size, use_convex_hull=True)
+    reachable_set = PolytopeReachableSet(parent_state=None, polytope_list=polytope_list, sys=dyn, epsilon=0.001, contains_goal_function=None,
+                                         cost_to_go_function=None, mode_consistent_sampling_bias=0., distance_scaling_array=distance_scaling_array,
+                                         deterministic_next_state=None, use_true_reachable_set=False, reachable_set_step_size=plan_step_size,
+                                         nonlinear_dynamic_step_size=sim_step_size)
+    fig, ax = visualize_3D_AH_polytope_push_planning(polytope_list, dyn, color='red', alpha=0.01, distance_scaling_array=distance_scaling_array)
+    ax.scatter(root_state[0], root_state[1], root_state[2], color='blue', s=20)
+    ax.scatter(goal_state[0], goal_state[1], goal_state[2], color='green', s=20)
+
+    import pdb; pdb.set_trace()
+    # contains_goal, closest_polytope, exact_path_info = reachable_set.contains_goal(goal_state)
+
+    num_samples = 800
+    num_contains = 0
+    for i in range(num_samples):
+        if i % 100 == 0:
+            print('sampling: {0}/{1}'.format(i,num_samples))
+        new_sample = np.random.uniform([0.235, 0.035, 1.3], [0.265, 0.065, 1.8])
+        contain_flag, proj_state = reachable_set.contains(new_sample, return_closest_state=True)
+        if contain_flag:
+            num_contains += 1
+        ax.scatter(proj_state[0], proj_state[1], proj_state[2], color='purple', s=5)
+    print('{0}/{1} contained in polytopes'.format(num_contains,num_samples))
+
+    plt.show()

@@ -7,13 +7,13 @@ import random
 from timeit import default_timer
 from polytope_symbolic_system.common.utils import *
 from r3t.polygon.scene import *
+from r3t.common.debug import *
 
 
 EXTENSION_ERROR = {0: 'planning failed',
                    1: 'indirect collision with other obstacles detected',
                    2: 'change contact face duting contact',
                    3: 'success'}
-
 class Node_Hybrid_Contact:
     def __init__(self, state, reachable_set, parent = None, path_from_parent = None,
                  input_from_parent=None, mode_string_from_parent=None,
@@ -146,6 +146,9 @@ class R3T_Hybrid_Contact:
         :param dim_u: the input dimension
         :param path_class: A class handel that is used to represent path
         '''
+        ## debugger
+        self.debugger = JSONDebugger()
+
         self.dim_u = dim_u
         self.u_empty = np.zeros(dim_u)
         self.u_bar = np.zeros(dim_u)
@@ -159,6 +162,7 @@ class R3T_Hybrid_Contact:
         ## initialize planning scene
         scene, basic_info = load_planning_scene_from_file(planning_scene_pkl)
         self.root_node.set_planning_scene(scene)
+        self.debugger.add_node_data(self.root_node)
         self.contact_basic = basic_info
 
         ## compute_reachable_set
@@ -296,6 +300,7 @@ class R3T_Hybrid_Contact:
         plt.savefig('/home/yongpeng/下载/figure/debug/{0}_{1}.png'.format(hash(str(new_state_with_psic[:3])), \
                                                                          hash(str(nearest_node.state[:3]))))
         plt.close()
+        # self.debugger.add_node_data(new_node)
 
         error_code = 3
         return True, new_node, error_code
@@ -313,7 +318,6 @@ class R3T_Hybrid_Contact:
                  The goal node as a Node object. If no path is found, None is returned. self.goal_node is set to the return value after running.
         '''
         #TODO: Timeout and other termination functionalities
-        import pdb; pdb.set_trace()
         start = default_timer()
         # state: (x, y, theta), without psic
         self.goal_state = goal_state
@@ -644,3 +648,18 @@ class R3T_Hybrid_Contact:
                 break
         states.reverse(), inputs.reverse(), modes.reverse()
         return states, inputs, modes
+
+    def get_scene_of_planned_path(self, save_dir):
+        node = self.goal_node
+        num_scene = 0
+        while True:
+            if node.planning_scene is not None:
+                plt.clf()
+                visualize_scene(node.planning_scene, alpha=0.5)
+                plt.savefig(save_dir+'/{0}.png'.format(num_scene))
+                plt.close()
+                num_scene += 1
+            node = node.parent
+            if node is None:
+                break
+        print('R3T_Hybrid: planning scene saved ({0})'.format(save_dir))

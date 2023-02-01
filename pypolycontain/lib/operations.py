@@ -11,6 +11,7 @@ try:
     import pydrake.solvers.mathematicalprogram as MP
     import pydrake.solvers.gurobi as Gurobi_drake
     import pydrake.solvers.osqp as OSQP_drake
+    from pydrake.solvers import SolverOptions
     # use Gurobi solver
     global gurobi_solver,OSQP_solver, license
     gurobi_solver=Gurobi_drake.GurobiSolver()
@@ -303,7 +304,10 @@ def distance_point_polytope(P, x, ball="infinity", solver="Gurobi", distance_sca
 #    print "sadra",x_vector.shape
     a.UpdateCoefficients(np.hstack((Q.T,-np.eye(Q.n))), x_vector - Q.t)
     if solver=="Gurobi":
-        result=gurobi_solver.Solve(prog,None,None)
+        solver_opt = SolverOptions()
+        solver_opt.SetOption(gurobi_solver.solver_id(), 'OutputFlag', 0)
+        solver_opt.SetOption(gurobi_solver.solver_id(), 'LogToConsole', 0)
+        result=gurobi_solver.Solve(prog,None,solver_opt)
     elif solver=="osqp":
         result=OSQP_solver.Solve(prog,None,None)
     else:

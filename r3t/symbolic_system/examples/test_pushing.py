@@ -36,7 +36,7 @@ nonlinear_dynamics_time_step = 0.01
 max_planning_time = 100.0
 max_nodes_in_tree = 1000
 goal_tolerance = 0.001
-goal_sampling_bias = 0.02  # take sample from goal
+goal_sampling_bias = 0.05  # take sample from goal
 mode_consistent_sampling_bias = 0.5  # keey dynamic mode consistent (invariant contact face)
 distance_scaling_array = np.array([1.0, 1.0, 0.0695])
 quad_cost_state = np.diag([1.0, 1.0, 0.0695])
@@ -237,6 +237,8 @@ if success:
 print('Report: mode consistency rate {0}!'.format(np.sum(planner.polytope_data['consistent'])/len(planner.polytope_data['consistent'])))
 
 import pdb; pdb.set_trace()
+# planner.debugger.save()
+planner.get_scene_of_planned_path(save_dir='/home/yongpeng/research/R3T_shared/data/debug/planned_path')
 fig.legend()
 fig_data.legend()
 plt.show()

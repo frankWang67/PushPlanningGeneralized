@@ -96,12 +96,16 @@ class PolytopeReachableSet(ReachableSet):
                     current_closest_state = None
                     duplicate_states = duplicate_state_with_multiple_azimuth_angle(goal_state)
                     for i in range(len(duplicate_states)):
-                        candidate_distance, candidate_closest_state = distance_point_polytope(polytope, duplicate_states[i], ball='l2', distance_scaling_array=self.distance_scaling_array)
+                        candidate_distance, candidate_closest_state = \
+                            distance_point_polytope(polytope, duplicate_states[i],
+                                                    ball='l2', distance_scaling_array=self.distance_scaling_array)
                         if candidate_distance < current_distance:
                             current_distance = candidate_distance
                             current_closest_state = candidate_closest_state
                 else:
-                    current_distance, current_closest_state = distance_point_polytope(polytope, goal_state, ball='l2', distance_scaling_array=self.distance_scaling_array)
+                    current_distance, current_closest_state = \
+                        distance_point_polytope(polytope, goal_state,
+                                                ball='l2', distance_scaling_array=self.distance_scaling_array)
                 if current_distance < self.epsilon:
                     contains_flag = True
                     closest_state = goal_state
@@ -119,12 +123,16 @@ class PolytopeReachableSet(ReachableSet):
                 current_closest_state = None
                 duplicate_states = duplicate_state_with_multiple_azimuth_angle(goal_state)
                 for i in range(len(duplicate_states)):
-                    candidate_distance, candidate_closest_state = distance_point_polytope(polytope, duplicate_states[i], ball='l2', distance_scaling_array=self.distance_scaling_array)
+                    candidate_distance, candidate_closest_state = \
+                        distance_point_polytope(polytope, duplicate_states[i],
+                                                ball='l2', distance_scaling_array=self.distance_scaling_array)
                     if candidate_distance < current_distance:
                         current_distance = candidate_distance
                         current_closest_state = candidate_closest_state
             else:
-                distance, closest_state = distance_point_polytope(self.polytope_list, goal_state, ball='l2', distance_scaling_array=self.distance_scaling_array)
+                distance, closest_state = \
+                    distance_point_polytope(self.polytope_list, goal_state,
+                                            ball='l2', distance_scaling_array=self.distance_scaling_array)
             if distance < self.epsilon:
                 contains_flag = True
                 closest_state = goal_state
