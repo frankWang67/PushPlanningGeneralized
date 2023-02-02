@@ -1228,6 +1228,38 @@ class PushDTHybridSystem:
 
         return True, state_list[nearest_state_index], state_list[:nearest_state_index+1]
 
+    def get_pusher_location(self, state, contact_face):
+        """
+        Get the pusher centroid
+        :param state: the state, including psic
+        :param contact_face: the contact face
+        """
+        psic = state[3]
+        xl, yl, rl = self.slider_geom
+        # compute contact location and bias
+        if contact_face == 'front':
+            x = xl/2
+            y = x*np.tan(psic)
+            bias = np.array([rl, 0.])
+        elif contact_face == 'back':
+            x = -xl/2
+            y = x*np.tan(psic)
+            bias = np.array([-rl, 0.])
+        elif contact_face == 'left':
+            y = yl/2
+            x = y/np.tan(psic)
+            bias = np.array([0., rl])
+        elif contact_face == 'right':
+            y = -yl/2
+            x = y/np.tan(psic)
+            bias = np.array([0., -rl])
+        else:
+            raise NotImplementedError('PushDTHybridSystem: the contact face {0} is not supported!'.format(contact_face))
+        
+        # convert to world frame
+        pusher_centroid = state[:2] + np.matmul(rotation_matrix(state[2]), np.array([x, y])+bias)
+        return pusher_centroid
+
     def _get_contact_face_from_state(self, state):
         """
         Get the contact face from state
@@ -1398,6 +1430,7 @@ class PushDTHybridSystem:
 
 if __name__ == '__main__':
     dyn = PushDTHybridSystem(quad_cost_input=[0.001, 0.001, 5e-6])  # test with default value
+    import pdb; pdb.set_trace()
     
     distance_scaling_array = np.array([1.0, 1.0, 0.0695])
     polytope_parent_state = np.array([0.345, 0.165, -0.99*np.pi, 0.9*np.pi])

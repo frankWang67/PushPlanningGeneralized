@@ -100,3 +100,17 @@ def get_vector_azimuth_angle(vec):
     :return: the azimuth angle
     """
     return np.arctan2(vec[1],vec[0])
+
+def rad2deg(rad):
+    """
+    Convert angle in radians to degree
+    :param rad: radians
+    """
+    return rad/np.pi*180.
+
+def deg2rad(deg):
+    """
+    Convert angle in degree to radians
+    :param rad: degree
+    """
+    return deg/180.*np.pi

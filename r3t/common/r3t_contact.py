@@ -10,10 +10,14 @@ from r3t.polygon.scene import *
 from r3t.common.debug import *
 
 
-EXTENSION_ERROR = {0: 'planning failed',
-                   1: 'indirect collision with other obstacles detected',
-                   2: 'change contact face duting contact',
-                   3: 'success'}
+EXTENSION_ERROR = {
+                    0: 'meaningless extension, goal point too close to parent state',
+                    1: 'hash collision, goal node already explored',
+                    2: 'planning failed',
+                    3: 'indirect collision with other obstacles detected',
+                    4: 'change contact face duting contact',
+                    5: 'success'
+                  }
 class Node_Hybrid_Contact:
     def __init__(self, state, reachable_set, parent = None, path_from_parent = None,
                  input_from_parent=None, mode_string_from_parent=None,
@@ -154,7 +158,9 @@ class R3T_Hybrid_Contact:
         self.u_bar = np.zeros(dim_u)
         self.root_node = Node_Hybrid_Contact(state=root_state,
                                              reachable_set=compute_reachable_set(root_state, self.u_empty),
+                                             path_from_parent=root_state.reshape(-1),
                                              input_from_parent=self.u_empty,
+                                             mode_string_from_parent=('back', 'sticking'),
                                              cost_from_parent=0)
         self.root_id = hash(str(root_state[:-1]))  # exclude psic
         self.state_dim = root_state.shape[0]
@@ -247,14 +253,25 @@ class R3T_Hybrid_Contact:
         :return: is_extended, new_node
         """
         error_code = -1
+
+        # extension validity
+        if np.linalg.norm(new_state-nearest_node.state[-1]) < nearest_node.reachable_set.epsilon:
+            error_code = 0
+            return False, None, error_code
+
         # check for obstacles
         plan_success_flag, cost_to_go, path, new_state_with_psic, applied_u = \
             nearest_node.reachable_set.plan_path_in_set_with_hybrid_dynamics(new_state, closest_polytope, Z_obs_list)
         # FIXME: Support for partial extensions
 
+        # hash collision check
+        if hash(str(new_state_with_psic[:-1])) in self.state_to_node_map:
+            error_code = 1
+            return False, None, error_code
+
         # cannot connect
         if not plan_success_flag:
-            error_code = 0
+            error_code = 2
             return False, None, error_code
 
         # collision check and contact reconfiguration (planning with contact)
@@ -274,14 +291,14 @@ class R3T_Hybrid_Contact:
 
         # indirect collision, uncontrollable, discard without extension
         if not can_extend_flag:
-            error_code = 1
+            error_code = 3
             return False, None, error_code
 
         # remains contact and switch pushing face, discard without extension
         if in_contact_flag and \
             nearest_node.planning_scene.in_contact and \
             not closest_polytope.mode_consistent:
-            error_code = 2
+            error_code = 4
             return False, None, error_code
 
         # can connect
@@ -294,15 +311,15 @@ class R3T_Hybrid_Contact:
         new_node.set_planning_scene(new_planning_scene)
 
         ## FOR DEBUG
-        from r3t.polygon.scene import visualize_scene
-        plt.clf()
-        fig, ax = visualize_scene(new_planning_scene, alpha=0.75)
-        plt.savefig('/home/yongpeng/下载/figure/debug/{0}_{1}.png'.format(hash(str(new_state_with_psic[:3])), \
-                                                                         hash(str(nearest_node.state[:3]))))
-        plt.close()
-        # self.debugger.add_node_data(new_node)
+        # from r3t.polygon.scene import visualize_scene
+        # plt.clf()
+        # fig, ax = visualize_scene(new_planning_scene, alpha=0.75)
+        # plt.savefig('/home/yongpeng/下载/figure/debug/{0}_{1}.png'.format(hash(str(new_state_with_psic[:3])), \
+        #                                                                  hash(str(nearest_node.state[:3]))))
+        # plt.close()
+        self.debugger.add_node_data(new_node)
 
-        error_code = 3
+        error_code = 5
         return True, new_node, error_code
 
     def build_tree_to_goal_state(self, goal_state, allocated_time = 20, stop_on_first_reach = False, rewire=False, explore_deterministic_next_state = False, max_nodes_to_add = int(1e3),\
@@ -341,6 +358,12 @@ class R3T_Hybrid_Contact:
                                                cost_from_parent=cost_to_go,
                                                path_from_parent=path)
 
+            # skip collision check, update planning scene
+            goal_planning_scene = copy.deepcopy(goal_node.parent.planning_scene)
+            goal_planning_scene.target_polygon = gen_polygon(goal_node.state[:3], self.contact_basic.geom_target, 'box')
+            goal_node.set_planning_scene(goal_planning_scene)
+
+            # assign the goal node
             self.goal_node=goal_node
             # print("finished search")
             return True, self.goal_node
@@ -389,7 +412,7 @@ class R3T_Hybrid_Contact:
                                                                                            duplicate_search_azimuth=True,
                                                                                            slider_in_contact=nearest_node.planning_scene.in_contact)
                     if discard:
-                        print('R3T_Hybrid: extension from {0} to {1} failed!'.format(nearest_node.parent.state[:-1], new_state))
+                        print('R3T_Hybrid: extension from {0} to {1} failed!'.format(nearest_node.state[:-1], new_state))
                         continue
                     self.time_cost['nn_search'].append(default_timer()-T_NN_SEARCH_START)
 
@@ -399,7 +422,7 @@ class R3T_Hybrid_Contact:
                     # EXTENSION
                     is_extended, new_node, error_code = self.extend(new_state, nearest_node, nearest_polytope, Z_obs_list)
                     if not is_extended:
-                        print('R3T_Hybrid: extension from {0} to {1} failed!'.format(nearest_node.parent.state[:-1], new_state))
+                        print('R3T_Hybrid: extension from {0} to {1} failed!'.format(nearest_node.state[:-1], new_state))
                         print('R3T_Hybrid: extension error report -> {0}'.format(EXTENSION_ERROR[error_code]))
                         continue
 
@@ -409,7 +432,7 @@ class R3T_Hybrid_Contact:
                     # FIXME: sanity check to prevent numerical errors
                     new_state_id = hash(str(new_node.state[:-1]))  # without psic
                     if new_state_id in self.state_to_node_map:
-                        print('R3T_Hybrid: extension from {0} to {1} failed!'.format(nearest_node.parent.state[:-1], new_state))
+                        print('R3T_Hybrid: extension from {0} to {1} failed!'.format(nearest_node.state[:-1], new_state))
                         continue
                     self.time_cost['extend'].append(default_timer()-T_EXTEND_START)
 
@@ -475,6 +498,12 @@ class R3T_Hybrid_Contact:
                                                    cost_from_parent=cost_to_go,
                                                    path_from_parent=path)
 
+                # skip collision check, update planning scene
+                goal_planning_scene = copy.deepcopy(goal_node.parent.planning_scene)
+                goal_planning_scene.target_polygon = gen_polygon(goal_node.state[:3], self.contact_basic.geom_target, 'box')
+                goal_node.set_planning_scene(goal_planning_scene)
+
+                # assign goal node
                 self.goal_node=goal_node
                 print("finished search")
                 return True, self.goal_node

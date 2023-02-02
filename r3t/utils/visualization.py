@@ -1,9 +1,11 @@
 from collections import deque
 import matplotlib.pyplot as plt
 from matplotlib import collections as mc
+from matplotlib import transforms, animation
 import numpy as np
 from r3t.symbolic_system.examples.hopper_2D_visualize import *
 import pypolycontain.visualization.visualize_2D as vis2D
+from polytope_symbolic_system.common.utils import *
 
 def visualize_node_tree_2D(rrt, fig=None, ax=None, s=1, linewidths = 0.25, show_path_to_goal=False, goal_override=None, dims=[0,1]):
     if fig is None or ax is None:
@@ -357,3 +359,244 @@ def visualize_projected_ND_polytopic_tree(rrt, dim1, dim2, fig=None, ax=None, s=
     vis2D.visualize_ND_AH_polytope(polytopes_list, dim1, dim2, fig=fig, ax=ax, alpha=polytope_alpha)
 
     return fig, ax
+
+class PushPlanningVisualizer:
+    def __init__(self, basic_info, visual_data) -> None:
+        self.contact_basic = basic_info
+        self.X_slider = visual_data['X_slider']
+        self.X_pusher = visual_data['X_pusher']
+        self.U_slider = visual_data['U_slider']
+        self.X_obstacles = visual_data['X_obstacles']
+
+        self.num_frames = len(self.X_slider)
+
+    def set_patches(self, ax):
+        """
+        Set patches of slider, pusher and obstacles
+        :param ax: the Axes object
+        """
+        # plot slider
+        Xl, Yl, Rl = self.contact_basic.geom_target
+        x_s0 = self.X_slider[0]
+        R_s0 = rotation_matrix(0.0)
+        bias_s0 = R_s0.dot([-Xl/2., -Yl/2.])
+        self.slider = patches.Rectangle(
+            x_s0[:2]+bias_s0[:2], Xl, Yl, angle=0.0, facecolor='#1f77b4', edgecolor='black'
+        )
+
+        # plot pusher
+        x_p0 = self.X_pusher[0]
+        self.pusher = patches.Circle(
+            x_p0, radius=Rl, facecolor='#7f7f7f', edgecolor='black'
+        )
+
+        # plot obstacles
+        self.obstacles = []
+        self.num_obstacles = len(self.X_obstacles[0])
+        cmap = plt.cm.Pastel2
+        for k in range(self.num_obstacles):
+            x_o0 = self.X_obstacles[0][k]
+            Xl, Yl = self.contact_basic.geom_list[k]
+            R_o0 = rotation_matrix(0.0)
+            bias_o0 = R_o0.dot([-Xl/2., -Yl/2.])
+            new_obstacle = patches.Rectangle(
+                x_o0[:2]+bias_o0[:2], Xl, Yl, angle=0.0, facecolor=cmap(k), edgecolor='black'
+            )
+            self.obstacles.append(new_obstacle)
+        
+        # add patches
+        ax.add_patch(self.slider)
+        ax.add_patch(self.pusher)
+        for k in range(self.num_obstacles):
+            ax.add_patch(self.obstacles[k])
+
+    def animate(self, i, ax):
+        """
+        Render the ith frame
+        :param i: frame index
+        :param ax: the Axes object
+        """
+        trans_ax = ax.transData
+
+        # render slider
+        Xl, Yl, Rl = self.contact_basic.geom_target
+        x_si = self.X_slider[i]
+        R_si = rotation_matrix(x_si[2])
+        bias_si = R_si.dot([-Xl/2., -Yl/2.])
+
+        bottom_left_coords = x_si[:2] + bias_si[:2]
+        bottom_left_coords = trans_ax.transform(bottom_left_coords)
+        trans_si = transforms.Affine2D().rotate_around(
+            bottom_left_coords[0], bottom_left_coords[1], x_si[2]
+        )
+        self.slider.set_transform(trans_ax+trans_si)
+        self.slider.set_xy([x_si[0]+bias_si[0], x_si[1]+bias_si[1]])
+
+        # render pusher
+        x_pi = self.X_pusher[i]
+        self.pusher.set_center(x_pi)
+
+        # render obstacles
+        for k in range(self.num_obstacles):
+            x_oi = self.X_obstacles[i][k]
+            Xl, Yl = self.contact_basic.geom_list[k]
+            R_oi = rotation_matrix(x_oi[2])
+            bias_oi = R_oi.dot([-Xl/2., -Yl/2.])
+
+            bottom_left_coords = x_oi[:2] + bias_oi[:2]
+            bottom_left_coords = trans_ax.transform(bottom_left_coords)
+            trans_oi = transforms.Affine2D().rotate_around(
+                bottom_left_coords[0], bottom_left_coords[1], x_oi[2]
+            )
+            self.obstacles[k].set_transform(trans_ax+trans_oi)
+            self.obstacles[k].set_xy([x_oi[0]+bias_oi[0], x_oi[1]+bias_oi[1]])
+        
+        return []
+
+    def plot_input(self, axes):
+        """
+        Plot the control input
+        :param axes: the Axes objects
+        """
+        t_u = np.linspace(0., self.contact_basic.contact_time*(self.num_frames-2), self.num_frames-1)
+        U_array = np.array(self.U_slider)
+
+        # plot normal force
+        axes[0].plot(t_u, U_array[:, 0], label='f_n')
+        # plot force limit
+        axes[0].plot(t_u, 0.3*np.ones(self.num_frames-1), color='red', linestyle='--', label='f_max')
+        axes[0].plot(t_u, -0.3*np.ones(self.num_frames-1), color='green', linestyle='--', label='f_min')
+        handles, labels = axes[0].get_legend_handles_labels()
+        axes[0].legend(handles, labels)
+        axes[0].set_xlabel('time (s)')
+        axes[0].set_ylabel('normal force (N)')
+        axes[0].grid('on')
+
+        # plot tangent force
+        axes[1].plot(t_u, U_array[:, 1], label='f_t')
+        # plot force limit
+        axes[1].plot(t_u, 0.3*np.ones(self.num_frames-1), color='red', linestyle='--', label='f_max')
+        axes[1].plot(t_u, -0.3*np.ones(self.num_frames-1), color='green', linestyle='--', label='f_min')
+        axes[1].plot(t_u, self.contact_basic.miu_pusher_slider*U_array[:, 0], color='lightcoral', linestyle='--', label='f_t_max')
+        axes[1].plot(t_u, -self.contact_basic.miu_pusher_slider*U_array[:, 0], color='lightgreen', linestyle='--', label='f_t_min')
+        handles, labels = axes[1].get_legend_handles_labels()
+        axes[1].legend(handles, labels)
+        axes[1].set_xlabel('time (s)')
+        axes[1].set_ylabel('tangent force (N)')
+        axes[1].grid('on')
+
+        # plot dpsic
+        axes[2].plot(t_u, U_array[:, 2], label='dpsic')
+        # plot dpsic limit
+        axes[2].plot(t_u, 3.0*np.ones(self.num_frames-1), color='red', linestyle='--', label='dpsic_max')
+        axes[2].plot(t_u, -3.0*np.ones(self.num_frames-1), color='red', linestyle='--', label='dpsic_min')
+        handles, labels = axes[2].get_legend_handles_labels()
+        axes[2].legend(handles, labels)
+        axes[2].set_xlabel('time (s)')
+        axes[2].set_ylabel('pusher velocity (rad/s)')
+        axes[2].grid('on')
+
+    def plot_state(self, axes):
+        """
+        Plot the slider states
+        :param axes: the Axes objects
+        """
+        t_x = np.linspace(0., self.contact_basic.contact_time*(self.num_frames-1), self.num_frames)
+        X_array = np.array(self.X_slider)
+        X_pusher = np.array(self.X_pusher)
+        X_pusher_rel = []
+        for i in range(self.num_frames):
+            R_i = rotation_matrix(X_array[i, 2])
+            X_pusher_rel.append(R_i.T.dot(X_pusher[i]-X_array[i,:2]))
+        X_pusher_rel = np.array(X_pusher_rel)
+
+        # plot x and y
+        axes[0].plot(t_x, X_array[:, 0], label='x')
+        axes[0].plot(t_x, X_array[:, 1], label='y')
+        handles, labels = axes[0].get_legend_handles_labels()
+        axes[0].legend(handles, labels)
+        axes[0].set_xlabel('time (s)')
+        axes[0].set_ylabel('position (m)')
+        axes[0].grid('on')
+
+        # plot azimuth angle
+        axes[1].plot(t_x, restrict_angle_in_unit_circle(X_array[:, 2]), label='theta')
+        handles, labels = axes[1].get_legend_handles_labels()
+        axes[1].legend(handles, labels)
+        axes[1].set_xlabel('time (s)')
+        axes[1].set_ylabel('yaw (rad)')
+        axes[1].grid('on')
+
+        # plot psic
+        axes[2].plot(t_x, X_pusher_rel[:, 0], label='px')
+        axes[2].plot(t_x, X_pusher_rel[:, 1], label='py')
+        handles, labels = axes[2].get_legend_handles_labels()
+        axes[2].legend(handles, labels)
+        axes[2].set_xlabel('time (s)')
+        axes[2].set_ylabel('psic (rad)')
+        axes[2].grid('on')
+
+def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0):
+    """
+    Plot animation of push planning
+    :param visualizer: the PushPlanningVisualizer object
+    :param vel_scale: the video speed scale factor
+    """
+    # get figure
+    fig, ax = plt.subplots()
+    fig.canvas.manager.set_window_title('Planning Scene')
+
+    # set limit
+    ax.set_xlim([0.0, 0.5])
+    ax.set_ylim([0.0, 0.5])
+
+    # other settings
+    ax.set_autoscale_on(False)
+    ax.grid('on')
+    ax.set_aspect('equal', 'box')
+    ax.set_title('Push Planning Result Animation')
+    ax.set_xlabel('x (m)')
+    ax.set_ylabel('y (m))')
+
+    # set patch
+    visualizer.set_patches(ax)
+
+    # animation
+    anim = animation.FuncAnimation(
+        fig,
+        visualizer.animate,
+        frames=visualizer.num_frames,
+        fargs=(ax,),
+        interval=0.05*1000*vel_scale,
+        blit=True,
+        repeat=False
+    )
+
+    # plot control inputs
+    fig2, axes2 = plt.subplots(1, 3, sharex=True)
+    fig2.set_size_inches(9, 3, forward=True)
+    visualizer.plot_input(axes2)
+
+    # plot slider states
+    fig3, axes3 = plt.subplots(1, 3, sharex=True)
+    fig3.set_size_inches(9, 3, forward=True)
+    visualizer.plot_state(axes3)
+
+    plt.show()
+
+if __name__ == '__main__':
+    from r3t.polygon.scene import *
+    # WARNING: partially initialized
+    basic_info = ContactBasic(miu_list=[0.3 for i in range(3)],
+                              geom_list=[[0.07, 0.12] for i in range(3)],
+                              geom_target=[0.07, 0.12, 0.01],
+                              contact_time=0.05
+                             )
+
+    data = pickle.load(open('/home/yongpeng/research/R3T_shared/data/debug/2023_02_02_18_04/output_2.pkl', 'rb'))
+    visualizer = PushPlanningVisualizer(basic_info=basic_info,
+                                        visual_data=data)
+
+    # TEST ANIMATION
+    test_plot_push_planning(visualizer, vel_scale=2.0)
+    

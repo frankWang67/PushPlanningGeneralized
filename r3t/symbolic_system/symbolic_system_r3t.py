@@ -886,16 +886,8 @@ class SymbolicSystem_R3T(R3T):
                 '''
                 deterministic_next_state = None
                 reachable_set_polytope = self.sys.get_reachable_polytopes(state, step_size=self.step_size, use_convex_hull=use_convex_hull)
-                if np.all(self.sys.get_linearization(state=state).B == 0):
-                    if use_true_reachable_set:
-                        deterministic_next_state=[state]
-                        for step in range(int(self.step_size / nonlinear_dynamic_step_size)):
-                            state = self.sys.forward_step(starting_state=state, modify_system=False, return_as_env=False, step_size=nonlinear_dynamic_step_size)
-                            deterministic_next_state.append(state)
-                    else:
-                        deterministic_next_state = [state, self.sys.forward_step(starting_state=state, modify_system=False, return_as_env=False, step_size=self.step_size)]
                 return PolytopeReachableSet(state,reachable_set_polytope, sys=self.sys, contains_goal_function=self.contains_goal_function, \
-                                            deterministic_next_state=deterministic_next_state, reachable_set_step_size=self.step_size, use_true_reachable_set=use_true_reachable_set,\
+                                            deterministic_next_state=None, reachable_set_step_size=self.step_size, use_true_reachable_set=use_true_reachable_set,\
                                             nonlinear_dynamic_step_size=nonlinear_dynamic_step_size)
         R3T.__init__(self, self.sys.get_current_state(), compute_reachable_set, sampler, PolytopeReachableSetTree, SymbolicSystem_StateTree, PolytopePath)
 
@@ -1025,3 +1017,56 @@ class SymbolicSystem_Hybrid_R3T_Contact(R3T_Hybrid_Contact):
                                     state_tree_class=SymbolicSystem_StateTree,
                                     path_class=PolytopePath,
                                     dim_u=self.sys.dim_u)
+
+    def get_plan_anim_raw_data(self):
+        X_slider = []
+        U_slider = []
+        X_pusher = []
+        X_obstacles = []
+
+        import pdb; pdb.set_trace()
+        node = self.goal_node
+        while True:
+            assert (node.planning_scene is not None)
+            if node == self.root_node:
+                slider_state = node.path_from_parent.reshape(-1)
+                X_slider.append(slider_state[:3].tolist())
+                X_pusher.append(self.sys.get_pusher_location(slider_state, contact_face=node.mode_from_parent[0]).reshape(-1).tolist())
+            else:
+                for i in range(len(node.path_from_parent)-1,0,-1):
+                    slider_state = node.path_from_parent[i].reshape(-1)
+                    X_slider.append(slider_state[:3].tolist())
+                    X_pusher.append(self.sys.get_pusher_location(slider_state, contact_face=node.mode_from_parent[0]).reshape(-1).tolist())
+                    if isinstance(node.input_from_parent, list):
+                        U_slider.append(node.input_from_parent[i-1].reshape(-1).tolist())
+                    else:
+                        U_slider.append(node.input_from_parent.reshape(-1).tolist())
+
+            obstacle_states = []
+            for i in range(len(node.planning_scene.states)):
+                obstacle_states.append(np.array(node.planning_scene.states)[i].reshape(-1).tolist())
+            X_obstacles.append([obstacle_states]*(len(node.path_from_parent)-1))
+
+            node = node.parent
+            if node is None:
+                break
+
+        # reverse all
+        X_slider.reverse()
+        U_slider.reverse()
+        X_pusher.reverse()
+        X_obstacles.reverse()
+
+        data_collection = {
+                            'X_slider': X_slider,
+                            'U_slider': U_slider,
+                            'X_pusher': X_pusher,
+                            'X_obstacles': X_obstacles
+                          }
+
+        data_root = '/home/yongpeng/research/R3T_shared/data/debug'
+        timestamp = self.debugger.timestamp
+        os.mkdir(os.path.join(data_root, timestamp))
+
+        with open(os.path.join(data_root, timestamp, 'output.pkl'), 'wb') as f:
+            pickle.dump(data_collection, f)

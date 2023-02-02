@@ -238,7 +238,8 @@ print('Report: mode consistency rate {0}!'.format(np.sum(planner.polytope_data['
 
 import pdb; pdb.set_trace()
 # planner.debugger.save()
-planner.get_scene_of_planned_path(save_dir='/home/yongpeng/research/R3T_shared/data/debug/planned_path')
+# planner.get_scene_of_planned_path(save_dir='/home/yongpeng/research/R3T_shared/data/debug/planned_path')
+planner.get_plan_anim_raw_data()
 fig.legend()
 fig_data.legend()
 plt.show()

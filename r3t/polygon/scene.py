@@ -15,11 +15,13 @@ class ContactBasic:
     Underlying class of R3T, including basic information about object-object contact,
     including friction coefficient, geometry ...
     """
-    def __init__(self, miu_list=None, geom_list=None, A_list=None, geom_target=None, contact_time=0.) -> None:
+    def __init__(self, miu_list=None, geom_list=None, A_list=None, geom_target=None, \
+                    miu_pusher_slider=0.3, contact_time=0.) -> None:
         self.miu_list = miu_list  # friction coeff between all objects and target
         self.geom_list = geom_list  # geometry of all objects
         self.A_list = A_list  # limit surface of all obstacles
         self.geom_target = geom_target  # geometry of the target object
+        self.miu_pusher_slider = miu_pusher_slider  # the friction coefficient between pusher and slider
         self.contact_time = contact_time
         # FIXME: more to be added
 
