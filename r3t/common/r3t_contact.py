@@ -14,7 +14,7 @@ EXTENSION_ERROR = {
                     0: 'meaningless extension, goal point too close to parent state',
                     1: 'hash collision, goal node already explored',
                     2: 'planning failed',
-                    3: 'indirect collision with other obstacles detected',
+                    3: 'indirect collision with other obstacles detected, or collide with static ones',
                     4: 'change contact face duting contact',
                     5: 'success'
                   }
@@ -139,7 +139,8 @@ class R3T_Hybrid_Contact:
                  compute_reachable_set, sampler, \
                  goal_sampling_bias, \
                  distance_scaling_array, \
-                 reachable_set_tree_class, state_tree_class, path_class, dim_u, rewire_radius = None):
+                 reachable_set_tree_class, state_tree_class, path_class, dim_u, rewire_radius = None, \
+                 print_flag=True):
         '''
         Base RG-RRT*
         :param root_state: The root state, with psic
@@ -151,14 +152,14 @@ class R3T_Hybrid_Contact:
         :param path_class: A class handel that is used to represent path
         '''
         ## debugger
-        self.debugger = JSONDebugger()
+        # self.debugger = JSONDebugger()
 
         self.dim_u = dim_u
         self.u_empty = np.zeros(dim_u)
         self.u_bar = np.zeros(dim_u)
         self.root_node = Node_Hybrid_Contact(state=root_state,
                                              reachable_set=compute_reachable_set(root_state, self.u_empty),
-                                             path_from_parent=root_state.reshape(-1),
+                                             path_from_parent=root_state.reshape(1,-1),
                                              input_from_parent=self.u_empty,
                                              mode_string_from_parent=('back', 'sticking'),
                                              cost_from_parent=0)
@@ -168,7 +169,7 @@ class R3T_Hybrid_Contact:
         ## initialize planning scene
         scene, basic_info = load_planning_scene_from_file(planning_scene_pkl)
         self.root_node.set_planning_scene(scene)
-        self.debugger.add_node_data(self.root_node)
+        # self.debugger.add_node_data(self.root_node)
         self.contact_basic = basic_info
 
         ## compute_reachable_set
@@ -217,6 +218,9 @@ class R3T_Hybrid_Contact:
         ## polytope data
         self.polytope_data = {'consistent': []}
 
+        ## print flag
+        self.print_flag = print_flag
+
     def create_child_node(self, parent_node, child_state, input_from_parent, 
                                 mode_string_from_parent, cost_from_parent = None, path_from_parent = None):
         '''
@@ -252,6 +256,8 @@ class R3T_Hybrid_Contact:
         :param Z_obs_list: the MultiPolygon object for obstacles
         :return: is_extended, new_node
         """
+        T_EXTEND_START = default_timer()
+
         error_code = -1
 
         # extension validity
@@ -317,9 +323,12 @@ class R3T_Hybrid_Contact:
         # plt.savefig('/home/yongpeng/下载/figure/debug/{0}_{1}.png'.format(hash(str(new_state_with_psic[:3])), \
         #                                                                  hash(str(nearest_node.state[:3]))))
         # plt.close()
-        self.debugger.add_node_data(new_node)
+
+        # TIME CONSUMING
+        # self.debugger.add_node_data(new_node)
 
         error_code = 5
+        self.time_cost['extend'].append(default_timer()-T_EXTEND_START)
         return True, new_node, error_code
 
     def build_tree_to_goal_state(self, goal_state, allocated_time = 20, stop_on_first_reach = False, rewire=False, explore_deterministic_next_state = False, max_nodes_to_add = int(1e3),\
@@ -370,18 +379,25 @@ class R3T_Hybrid_Contact:
 
         while True:
             # print("R3T_Hybrid: running search")
-            print("R3T_Hybrid: current time: {0}, total nodes: {1}".format(default_timer()-start, self.node_tally))
+            if self.print_flag:
+                print("R3T_Hybrid: current time: {0}, total nodes: {1}".format(default_timer()-start, self.node_tally))
+            else:
+                if self.node_tally % 100 == 0:
+                    print("R3T_Hybrid: current time: {0}, total nodes: {1}".format(default_timer()-start, self.node_tally))
             if stop_on_first_reach:
                 if self.goal_node is not None:
-                    print('R3T_Hybrid: Found path to goal with cost %f in %f seconds after exploring %d nodes' % (self.goal_node.cost_from_root,
+                    if self.print_flag:
+                        print('R3T_Hybrid: Found path to goal with cost %f in %f seconds after exploring %d nodes' % (self.goal_node.cost_from_root,
                     default_timer() - start, self.node_tally))
                     return True, self.goal_node
             if default_timer()-start>allocated_time:
                 if self.goal_node is None:
-                    print('R3T_Hybrid: Unable to find path within %f seconds!' % (default_timer() - start))
+                    if self.print_flag:
+                        print('R3T_Hybrid: Unable to find path within %f seconds!' % (default_timer() - start))
                     return False, None
                 else:
-                    print('R3T_Hybrid: Found path to goal with cost %f in %f seconds after exploring %d nodes' % (self.goal_node.cost_from_root,
+                    if self.print_flag:
+                        print('R3T_Hybrid: Found path to goal with cost %f in %f seconds after exploring %d nodes' % (self.goal_node.cost_from_root,
                     default_timer() - start, self.node_tally))
                     return True, self.goal_node
             # print("running search 1")
@@ -392,7 +408,8 @@ class R3T_Hybrid_Contact:
                 # state: (x, y, theta), without psic
                 if np.random.rand() <= self.goal_sampling_bias:
                     random_sample = goal_state
-                    print('R3T_Hybrid: sampling from goal!')
+                    if self.print_flag:
+                        print('R3T_Hybrid: sampling from goal!')
                 else:
                     random_sample = self.sampler()
                 sample_count+=1
@@ -412,18 +429,19 @@ class R3T_Hybrid_Contact:
                                                                                            duplicate_search_azimuth=True,
                                                                                            slider_in_contact=nearest_node.planning_scene.in_contact)
                     if discard:
-                        print('R3T_Hybrid: extension from {0} to {1} failed!'.format(nearest_node.state[:-1], new_state))
+                        if self.print_flag:
+                            print('R3T_Hybrid: extension from {0} to {1} failed!'.format(nearest_node.state[:-1], new_state))
                         continue
                     self.time_cost['nn_search'].append(default_timer()-T_NN_SEARCH_START)
 
                     self.polytope_data['consistent'].append(nearest_polytope.mode_consistent)
 
-                    T_EXTEND_START = default_timer()
                     # EXTENSION
                     is_extended, new_node, error_code = self.extend(new_state, nearest_node, nearest_polytope, Z_obs_list)
                     if not is_extended:
-                        print('R3T_Hybrid: extension from {0} to {1} failed!'.format(nearest_node.state[:-1], new_state))
-                        print('R3T_Hybrid: extension error report -> {0}'.format(EXTENSION_ERROR[error_code]))
+                        if self.print_flag:
+                            print('R3T_Hybrid: extension from {0} to {1} failed!'.format(nearest_node.state[:-1], new_state))
+                            print('R3T_Hybrid: extension error report -> {0}'.format(EXTENSION_ERROR[error_code]))
                         continue
 
                     # DISCARD THE STATE IF HASH VALUE COLLIDES, OR TOO CLOSE TO PARENT STATE, OR COLLISION IN CONNECTION
@@ -432,17 +450,20 @@ class R3T_Hybrid_Contact:
                     # FIXME: sanity check to prevent numerical errors
                     new_state_id = hash(str(new_node.state[:-1]))  # without psic
                     if new_state_id in self.state_to_node_map:
-                        print('R3T_Hybrid: extension from {0} to {1} failed!'.format(nearest_node.state[:-1], new_state))
+                        if self.print_flag:
+                            print('R3T_Hybrid: extension from {0} to {1} failed!'.format(nearest_node.state[:-1], new_state))
                         continue
-                    self.time_cost['extend'].append(default_timer()-T_EXTEND_START)
+                    # self.time_cost['extend'].append(default_timer()-T_EXTEND_START)
 
                 except Exception as e:
-                    print('R3T_Hybrid: caught exeption %s' % e)
+                    if self.print_flag:
+                        print('R3T_Hybrid: caught exeption %s' % e)
                     import pdb; pdb.set_trace()
                     is_extended = False
 
                 if not is_extended:
-                    print('R3T_Hybrid: Extension failed')
+                    if self.print_flag:
+                        print('R3T_Hybrid: Extension failed')
                     continue
                 else:
                     sample_is_valid = True
@@ -451,7 +472,8 @@ class R3T_Hybrid_Contact:
             # TWO MUCH FAILED SAMPLES WARNING
             # print('R3T_Hybrid: sample amount {0}!'.format(sample_count))
             if sample_count>100:
-                print('R3T_Hybrid: Warning: sample count %d' % sample_count)  # just warning that cannot get to a new sample even after so long
+                if self.print_flag:
+                    print('R3T_Hybrid: Warning: sample count %d' % sample_count)  # just warning that cannot get to a new sample even after so long
             
             T_REWIRE_START = default_timer()
             # ADD NEW SAMPLE TO REACHABLE_SET_TREE AND STATE_TREE
@@ -465,9 +487,10 @@ class R3T_Hybrid_Contact:
             try:
                 assert(new_state_id not in self.state_to_node_map)
             except:
-                print('R3T_Hybrid: State id hash collision!')
-                print('R3T_Hybrid: Original state is ', self.state_to_node_map[new_state_id].state[:-1])  # exclude psic
-                print('R3T_Hybrid: Attempting to insert', new_node.state[:-1])  # exclude psic
+                if self.print_flag:
+                    print('R3T_Hybrid: State id hash collision!')
+                    print('R3T_Hybrid: Original state is ', self.state_to_node_map[new_state_id].state[:-1])  # exclude psic
+                    print('R3T_Hybrid: Attempting to insert', new_node.state[:-1])  # exclude psic
                 raise AssertionError
 
             # ADD NEW SAMPLE TO STATE_TO_NODE_MAP
@@ -561,7 +584,8 @@ class R3T_Hybrid_Contact:
                     best_new_parent['u'] = applied_u
 
         if best_new_parent['node'] is not None:
-            print('R3T_Hybrid: 1 parent rewired!')
+            if self.print_flag:
+                print('R3T_Hybrid: 1 parent rewired!')
             self.delete_node(new_node)
             new_node = self.create_child_node(parent_node=best_new_parent['node'], 
                                               child_state=best_new_parent['new_state'],
@@ -621,7 +645,8 @@ class R3T_Hybrid_Contact:
 
             cost_to_go, path, new_state_with_psic, applied_u = exact_path_info
             if candidate_node.cost_from_root > cost_to_go + new_node.cost_from_root:
-                print('R3T_Hybrid: 1 child rewired!')
+                if self.print_flag:
+                    print('R3T_Hybrid: 1 child rewired!')
                 # delete new state
                 self.delete_node(candidate_node)
                 candidate_node = self.create_child_node(parent_node=new_node, 
@@ -678,6 +703,16 @@ class R3T_Hybrid_Contact:
         states.reverse(), inputs.reverse(), modes.reverse()
         return states, inputs, modes
 
+    def get_planned_path_langth(self):
+        length = 0.
+        _node = self.goal_node
+        while True:
+            if _node.parent is None:
+                break
+            length += np.linalg.norm(_node.state[0:2]-_node.parent.state[0:2])
+            _node = _node.parent
+        return length
+
     def get_scene_of_planned_path(self, save_dir):
         node = self.goal_node
         num_scene = 0
@@ -691,4 +726,5 @@ class R3T_Hybrid_Contact:
             node = node.parent
             if node is None:
                 break
-        print('R3T_Hybrid: planning scene saved ({0})'.format(save_dir))
+        if self.print_flag:
+            print('R3T_Hybrid: planning scene saved ({0})'.format(save_dir))

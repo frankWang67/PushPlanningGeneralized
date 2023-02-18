@@ -547,8 +547,12 @@ def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0):
     fig.canvas.manager.set_window_title('Planning Scene')
 
     # set limit
-    ax.set_xlim([0.0, 0.5])
-    ax.set_ylim([0.0, 0.5])
+    # ax.set_xlim([0.0, 0.5])
+    # ax.set_ylim([0.0, 0.5])
+
+    # for robot experiment
+    ax.set_xlim([0.3, 0.9])
+    ax.set_ylim([-0.3, 0.3])
 
     # other settings
     ax.set_autoscale_on(False)
@@ -572,6 +576,8 @@ def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0):
         repeat=False
     )
 
+    anim.save('./video/R3T_contact_planning.mp4', fps=25, extra_args=['-vcodec', 'libx264'])
+
     # plot control inputs
     fig2, axes2 = plt.subplots(1, 3, sharex=True)
     fig2.set_size_inches(9, 3, forward=True)
@@ -587,16 +593,24 @@ def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0):
 if __name__ == '__main__':
     from r3t.polygon.scene import *
     # WARNING: partially initialized
+    # basic_info = ContactBasic(miu_list=[0.3 for i in range(3)],
+    #                           geom_list=[[0.07, 0.12] for i in range(3)],
+    #                           geom_target=[0.07, 0.12, 0.01],
+    #                           contact_time=0.05
+    #                          )
+
+    # robot experiment
     basic_info = ContactBasic(miu_list=[0.3 for i in range(3)],
-                              geom_list=[[0.07, 0.12] for i in range(3)],
-                              geom_target=[0.07, 0.12, 0.01],
+                              geom_list=[[0.07, 0.122], [0.1, 0.102], [0.1, 0.102]],
+                              geom_target=[0.08, 0.15, 0.01],
                               contact_time=0.05
                              )
 
-    data = pickle.load(open('/home/yongpeng/research/R3T_shared/data/debug/2023_02_02_18_04/output_2.pkl', 'rb'))
+    timestamp = '2023_02_17_23_28'
+    data = pickle.load(open('/home/yongpeng/research/R3T_shared/data/debug/{0}/output.pkl'.format(timestamp), 'rb'))
     visualizer = PushPlanningVisualizer(basic_info=basic_info,
                                         visual_data=data)
 
     # TEST ANIMATION
-    test_plot_push_planning(visualizer, vel_scale=2.0)
+    test_plot_push_planning(visualizer, vel_scale=1.0)
     

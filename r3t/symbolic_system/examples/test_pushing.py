@@ -16,18 +16,26 @@ from r3t.symbolic_system.symbolic_system_r3t import *
 
 
 # scene configuration
-planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene.pkl'
+# --------------------------------------------------
+planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_0.pkl'
+# --------------------------------------------------
+
 xmin, xmax, ymin, ymax, thetamin, thetamax = 0.0, 0.5, 0.0, 0.5, -np.pi, np.pi
+
 search_space_dimensions = np.array([(xmin, xmax), (ymin, ymax), (thetamin, thetamax)])
 # state_space_obstacles = MultiPolygon()  # empty obstacles
 state_space_obstacles = None
 
 # dynamics configuration
-force_limit = 0.3
-pusher_vel_limit = 3.0  # dpsic
-unilateral_sliding_region_width = 0.005
-slider_geometry = [0.07, 0.12, 0.01]
-fric_coeff_slider_pusher = 0.3
+force_limit = 0.3  # old: 0.3
+pusher_vel_limit = 3.0  # dpsic, old: 3.0
+unilateral_sliding_region_width = 0.005  # old: 0.005
+# slider_geometry = [0.07, 0.12, 0.01]
+
+# test on robot
+slider_geometry = [0.08, 0.15, 0.01]
+
+fric_coeff_slider_pusher = 0.3  # old: 0.3
 fric_coeff_slider_ground = 0.2
 reachable_set_time_step = 0.05
 nonlinear_dynamics_time_step = 0.01
@@ -36,8 +44,8 @@ nonlinear_dynamics_time_step = 0.01
 max_planning_time = 100.0
 max_nodes_in_tree = 1000
 goal_tolerance = 0.001
-goal_sampling_bias = 0.05  # take sample from goal
-mode_consistent_sampling_bias = 0.5  # keey dynamic mode consistent (invariant contact face)
+goal_sampling_bias = 0.1  # take sample from goal
+mode_consistent_sampling_bias = 0.2  # keey dynamic mode consistent (invariant contact face)
 distance_scaling_array = np.array([1.0, 1.0, 0.0695])
 quad_cost_state = np.diag([1.0, 1.0, 0.0695])
 # quad_cost_input = np.diag([0.01, 0.01, 0.])
@@ -46,8 +54,13 @@ quad_cost_input = np.diag([0.001, 0.001, 5e-6])
 # x_init = [0.15, 0.05, 0.]
 # x_goal = [0.40, 0.30, 0.25*np.pi]
 
-x_init = [0.25, 0.05, 0.5*np.pi]
-x_goal = [0.25, 0.45, 0.5*np.pi]
+# test planning
+# x_init = [0.25, 0.05, 0.5*np.pi]
+# x_goal = [0.25, 0.45, 0.5*np.pi]
+
+# test on robot
+x_init = [0.3836, 0.0014, 0.0011945]
+x_goal = [0.7836, 0.0014, 0.0011945]
 
 psic_init = np.pi
 
@@ -239,7 +252,8 @@ print('Report: mode consistency rate {0}!'.format(np.sum(planner.polytope_data['
 import pdb; pdb.set_trace()
 # planner.debugger.save()
 # planner.get_scene_of_planned_path(save_dir='/home/yongpeng/research/R3T_shared/data/debug/planned_path')
-planner.get_plan_anim_raw_data()
+# planner.get_plan_anim_raw_data()
+# planner.get_control_nom_data()
 fig.legend()
 fig_data.legend()
 plt.show()

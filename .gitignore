@@ -1,3 +1,12 @@
 *.pyc
 *.npy
 *.zip
+
+# data
+data/debug/
+data/json/
+data/scene/
+
+R3T_Pendulum_*/
+R3T_Hopper_1d_*/
+R3T_Hopper_2d_*/

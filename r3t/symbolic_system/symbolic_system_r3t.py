@@ -959,7 +959,8 @@ class SymbolicSystem_Hybrid_R3T_Contact(R3T_Hybrid_Contact):
                  contains_goal_function = None, cost_to_go_function=None, \
                  distance_scaling_array = None, \
                  compute_reachable_set=None, use_true_reachable_set=False, \
-                 nonlinear_dynamic_step_size=1e-2, use_convex_hull=True, goal_tolerance = 1e-3):
+                 nonlinear_dynamic_step_size=1e-2, use_convex_hull=True, goal_tolerance = 1e-3, \
+                 print_flag = True):
         self.init_state = init_state
         self.sys = sys
         self.planning_scene_pkl = planning_scene_pkl
@@ -1016,15 +1017,23 @@ class SymbolicSystem_Hybrid_R3T_Contact(R3T_Hybrid_Contact):
                                     reachable_set_tree_class=PolytopeReachableSetTree,
                                     state_tree_class=SymbolicSystem_StateTree,
                                     path_class=PolytopePath,
-                                    dim_u=self.sys.dim_u)
+                                    dim_u=self.sys.dim_u,
+                                    print_flag=print_flag)
 
-    def get_plan_anim_raw_data(self):
+    def get_plan_anim_raw_data(self, data_root=None, idx=0):
+        """
+        Get the raw data for plan animation
+        """
+        if self.goal_node is None:
+            with open(os.path.join(data_root, '{0}.pkl'.format(idx)), 'wb') as f:
+                pickle.dump([], f)
+                return
+                
         X_slider = []
         U_slider = []
         X_pusher = []
         X_obstacles = []
 
-        import pdb; pdb.set_trace()
         node = self.goal_node
         while True:
             assert (node.planning_scene is not None)
@@ -1045,7 +1054,12 @@ class SymbolicSystem_Hybrid_R3T_Contact(R3T_Hybrid_Contact):
             obstacle_states = []
             for i in range(len(node.planning_scene.states)):
                 obstacle_states.append(np.array(node.planning_scene.states)[i].reshape(-1).tolist())
-            X_obstacles.append([obstacle_states]*(len(node.path_from_parent)-1))
+
+            if node == self.root_node:
+                X_obstacles.extend([obstacle_states])
+            else:
+                X_obstacles.extend([obstacle_states]*(len(node.path_from_parent)-1))
+
 
             node = node.parent
             if node is None:
@@ -1064,9 +1078,99 @@ class SymbolicSystem_Hybrid_R3T_Contact(R3T_Hybrid_Contact):
                             'X_obstacles': X_obstacles
                           }
 
+        # timestamp = self.debugger.timestamp
+        # try:
+        #     os.mkdir(os.path.join(data_root, timestamp))
+        # except:
+        #     pass
+
+        with open(os.path.join(data_root, '{0}.pkl'.format(idx)), 'wb') as f:
+            pickle.dump(data_collection, f)
+
+    def get_control_nom_data(self):
+        """
+        Get the nominal data for tracking control
+        """
+        X_slider = []
+        U_slider = []
+        X_pusher = []
+        contact_face = []
+
+        import pdb; pdb.set_trace()
+        node = self.goal_node
+        while True:
+            assert (node.planning_scene is not None)
+            if node == self.root_node:
+                slider_state = node.path_from_parent.reshape(-1)
+                X_slider.append(slider_state.tolist())
+                X_pusher.append(self.sys.get_pusher_location(slider_state, contact_face=node.mode_from_parent[0]).reshape(-1).tolist())
+                U_slider.append(np.zeros(3,).reshape(-1).tolist())
+                contact_face.extend([node.mode_from_parent[0]])
+            else:
+                for i in range(len(node.path_from_parent)-1,0,-1):
+                    slider_state = node.path_from_parent[i].reshape(-1)
+                    X_slider.append(slider_state.tolist())
+                    X_pusher.append(self.sys.get_pusher_location(slider_state, contact_face=node.mode_from_parent[0]).reshape(-1).tolist())
+                    if isinstance(node.input_from_parent, list):
+                        U_slider.append(node.input_from_parent[i-1].reshape(-1).tolist())
+                    else:
+                        U_slider.append(node.input_from_parent.reshape(-1).tolist())
+                contact_face.extend([node.mode_from_parent[0]]*(len(node.path_from_parent)-1))
+
+            node = node.parent
+            if node is None:
+                break
+
+        # reverse all
+        X_slider.reverse()
+        U_slider.reverse()
+        X_pusher.reverse()
+        contact_face.reverse()
+
+        import pdb; pdb.set_trace()
+
+        path_seg_list = []
+        last_contact_face = 'back'
+
+        X_slider_seg = []
+        U_slider_seg = []
+        contact_face_seg = []
+        for i in range(len(X_slider)):
+            if (i == 0) or (contact_face[i] == last_contact_face):
+                pass
+            else:
+                path_seg_list.append({
+                    'X_slider': copy.deepcopy(X_slider_seg),
+                    'U_slider': copy.deepcopy(U_slider_seg),
+                    'contact_face': copy.deepcopy(contact_face_seg)
+                })
+                X_slider_seg.clear()
+                U_slider_seg.clear()
+                contact_face_seg.clear()
+            X_slider_seg.append(X_slider[i])
+            U_slider_seg.append(U_slider[i])
+            contact_face_seg.append(contact_face[i])
+            if (i == 0):
+                last_contact_face = contact_face[1]
+            else:
+                last_contact_face = contact_face[i]
+
+        if len(X_slider_seg) > 0:
+            path_seg_list.append({
+                    'X_slider': copy.deepcopy(X_slider_seg),
+                    'U_slider': copy.deepcopy(U_slider_seg),
+                    'contact_face': copy.deepcopy(contact_face_seg)
+                })
+            X_slider_seg.clear()
+            U_slider_seg.clear()
+            contact_face_seg.clear()
+
         data_root = '/home/yongpeng/research/R3T_shared/data/debug'
         timestamp = self.debugger.timestamp
-        os.mkdir(os.path.join(data_root, timestamp))
+        try:
+            os.mkdir(os.path.join(data_root, timestamp))
+        except:
+            pass
 
-        with open(os.path.join(data_root, timestamp, 'output.pkl'), 'wb') as f:
-            pickle.dump(data_collection, f)
+        with open(os.path.join(data_root, timestamp, 'path_seg.pkl'), 'wb') as f:
+            pickle.dump(path_seg_list, f)

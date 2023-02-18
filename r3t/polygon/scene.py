@@ -2,6 +2,7 @@ import casadi as cs
 import copy
 from matplotlib import pyplot as plt
 from matplotlib import patches
+from scipy.spatial.transform import Rotation as R
 import pickle
 
 from polytope_symbolic_system.common.intfunc import *
@@ -30,11 +31,12 @@ class PlanningScene:
     Underlying class of NodeHybrid, including contact_flag, all polygons, and obstacle
     states
     """
-    def __init__(self, in_contact=False, target_polygon=None, polygons=None, states=None) -> None:
+    def __init__(self, in_contact=False, target_polygon=None, polygons=None, states=None, types=None) -> None:
         self.in_contact = in_contact
         self.target_polygon = target_polygon
         self.polygons = polygons
         self.states = states
+        self.types = types
 
 def load_planning_scene_from_file(scene_pkl):
     """
@@ -49,15 +51,30 @@ def load_planning_scene_from_file(scene_pkl):
     
     for i in range(raw['obstacle']['num']):
         obstacle_states.append(raw['obstacle']['x'][i])
-        obstacle_polygons.append(gen_polygon(coord=raw['obstacle']['x'][i],
-                                             geom=raw['obstacle']['geom'][i],
-                                             type='box'))
+        
+        ## for box shape only
+        if not 'shape' in raw['obstacle']:
+            obstacle_polygons.append(gen_polygon(coord=raw['obstacle']['x'][i],
+                                                 geom=raw['obstacle']['geom'][i],
+                                                 type='box'))
+
+        ## for general polygon shapes
+        else:
+            obstacle_polygons.append(gen_polygon(coord=raw['obstacle']['x'][i],
+                                                 geom=raw['obstacle']['geom'][i],
+                                                 type=raw['obstacle']['shape'][i]))
+
+    if 'type' in raw['obstacle']:
+        types = raw['obstacle']['type']
+    else:
+        types = [1] * raw['obstacle']['num']
 
     # prepare planning scene and basic information
     scene = PlanningScene(in_contact=False,
                           target_polygon=target_polygon,
                           polygons=obstacle_polygons,
-                          states=obstacle_states)
+                          states=obstacle_states,
+                          types=types)
 
     info = ContactBasic(miu_list=raw['obstacle']['miu'],
                         geom_list=raw['obstacle']['geom'],
@@ -99,6 +116,13 @@ def collision_check_and_contact_reconfig(basic:ContactBasic, scene:PlanningScene
                                  target_poly=scene.target_polygon,
                                  state_of_poly=scene.states,
                                  list_of_poly=scene.polygons)
+
+    # check if collision with static obstacles
+    if polygons_in_contact is not None:
+        for idx, polygon in enumerate(polygons_in_contact):
+            if polygon is not None and new_scene.types[idx] == 0:
+                new_scene.in_contact = True
+                return True, False, new_scene
     
     if not in_contact_flag:
         # no contact, can extend
@@ -151,6 +175,10 @@ def collision_check_and_contact_reconfig(basic:ContactBasic, scene:PlanningScene
         other_polygons = copy.deepcopy(new_scene.polygons)
         other_polygons.pop(idx)
         # collide with other polygons
+        if not MultiPolygon(other_polygons).is_valid:
+            # in contact, cannot extend
+            return True, False, new_scene
+        # collide with other polygons
         if intersects(polygon, MultiPolygon(other_polygons)):
             # in contact, cannot extend
             return True, False, new_scene
@@ -178,6 +206,10 @@ def visualize_scene(scene:PlanningScene, fig=None, ax=None, alpha=1.0):
 
     plt.xlim([0.0, 0.5])
     plt.ylim([0.0, 0.5])
+
+    # plt.xlim([0.3, 0.9])
+    # plt.ylim([-0.3, 0.3])
+
     plt.gca().set_aspect('equal')
     plt.grid('on')
 
@@ -187,7 +219,6 @@ if __name__ == '__main__':
     ## -------------------------------------------------
     ## SETTINGS
     ## -------------------------------------------------
-    """
     # Planning Scene Unit Test
     # --------------------------------------------------
     # # x_init = [0.25, 0.05, 0.5*np.pi]
@@ -198,23 +229,26 @@ if __name__ == '__main__':
     # --------------------------------------------------
     x_init = [0.25, 0.05, 0.5*np.pi]
 
-    # obstacle settings
-    # --------------------------------------------------
-    num_obs = 3
-    x_obs = [[0.1, 0.25, 0.6*np.pi],
-             [0.25, 0.25, 0.4*np.pi],
-             [0.4, 0.25, 0.6*np.pi]]
-    # x_obs = [[0.25, 0.25, 0.4*np.pi],
-    #          [0.4, 0.25, 0.6*np.pi]]
+    # real robot experiment
+    # quat_init = [-0.0087054, -0.0025106, 0.00057546, 0.99996]
+    # theta_init = R.from_quat(quat_init).as_euler('xyz')[2]
+    # print('theta0: ', theta_init)
+    # x_init = [0.3836, 0.0014, theta_init]
 
-    # other settings
-    # --------------------------------------------------
+    # # obstacle settings
+    # # --------------------------------------------------
+    # num_obs = 3
+
+    # # other settings
+    # # --------------------------------------------------
     miu_default = 0.3
     geom_default = [0.07, 0.12]  # box
 
-    # create planning scene and save to file
-    # --------------------------------------------------
-    pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene.pkl'
+    ## scene0
+    # pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_0.pkl'
+    # x_obs = [[0.1, 0.25, 0.6*np.pi],
+    #          [0.25, 0.25, 0.4*np.pi],
+    #          [0.4, 0.25, 0.6*np.pi]]
 
     __geom = cs.SX.sym('geom', 2)
     __c = rect_cs(__geom[0], __geom[1])/(__geom[0]*__geom[1])
@@ -223,20 +257,140 @@ if __name__ == '__main__':
     A = cs.Function('A', [__geom], [__A])
 
     lim_surf_A_obs = A(geom_default).toarray()
+
+    ## scene1
+    # pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_1.pkl'
+    # num_obs = 5
+    # x_obs = [[0.12, 0.20, 0.75*np.pi],
+    #          [0.25, 0.30, 0.0*np.pi],
+    #          [0.38, 0.20, 0.25*np.pi],
+    #          [0.12, 0.40, -0.75*np.pi],
+    #          [0.38, 0.40, -0.25*np.pi]]
+    # geom_obs = [[0.06, 0.12], \
+    #             [[0.03, 0.03*np.sqrt(3)], [0.06, 0], [0.03, -0.03*np.sqrt(3)], [-0.03, -0.03*np.sqrt(3)], [-0.06, 0], [-0.03, 0.03*np.sqrt(3)]], \
+    #             [0.06, 0.12], \
+    #             [0.06, 0.12], \
+    #             [0.06, 0.12]]
+    # shape_obs = ['box', 'polygon', 'box', 'box', 'box']
+    # type_obs = [1, 0, 1, 1, 1]
+    # A_list = []
+    # for i in range(num_obs):
+    #     if shape_obs[i] == 'box':
+    #         A_list.append(A(geom_obs[i]).toarray())
+    #     else:
+    #         A_list.append(None)
+
+    ## scene2
+    # pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_2.pkl'
+    # num_obs = 5
+    # x_obs = [[0.1, 0.05, 0.0*np.pi],
+    #          [0.4, 0.05, 0.0*np.pi],
+    #          [0.25, 0.20, 0.0*np.pi],
+    #          [0.1, 0.35, 0.0*np.pi],
+    #          [0.4, 0.35, 0.0*np.pi]]
+    # geom_obs = [[0.06, 0.06], \
+    #             [0.06, 0.06], \
+    #             [0.06, 0.06], \
+    #             [0.06, 0.06], \
+    #             [0.06, 0.06]]
+    # shape_obs = ['box', 'box', 'box', 'box', 'box']
+    # type_obs = [0, 0, 1, 1, 1]
+    # A_list = []
+    # for i in range(num_obs):
+    #     if shape_obs[i] == 'box':
+    #         A_list.append(A(geom_obs[i]).toarray())
+    #     else:
+    #         A_list.append(None)
+
+    ## scene3
+    pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_3.pkl'
+    num_obs = 6
+    x_obs = [[0.10, 0.25, 0.3*np.pi],
+             [0.24, 0.25, -0.2*np.pi],
+             [0.08, 0.08, 0.0*np.pi],
+             [0.10, 0.42, 0.0*np.pi],
+             [0.33, 0.33, 0.32*np.pi],
+             [0.40, 0.11, -0.13*np.pi]]
+    geom_obs = [[[0.03, 0.03*np.sqrt(3)], [0.06, 0], [0.03, -0.03*np.sqrt(3)], [-0.03, -0.03*np.sqrt(3)], [-0.06, 0], [-0.03, 0.03*np.sqrt(3)]], \
+                [[0.03, 0.03*np.sqrt(3)], [0.06, 0], [0.03, -0.03*np.sqrt(3)], [-0.03, -0.03*np.sqrt(3)], [-0.06, 0], [-0.03, 0.03*np.sqrt(3)]], \
+                [0.06, 0.06], \
+                [0.06, 0.06], \
+                [0.06, 0.06], \
+                [0.06, 0.06]]
+    shape_obs = ['polygon', 'polygon', 'box', 'box', 'box', 'box']
+    type_obs = [0, 0, 0, 0, 1, 1]
+    A_list = []
+    for i in range(num_obs):
+        if shape_obs[i] == 'box':
+            A_list.append(A(geom_obs[i]).toarray())
+        else:
+            A_list.append(None)
+
+    ## scene4
+    # pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_4.pkl'
+    # num_obs = 3
+    # x_obs = [[0.08, 0.32, 0.4*np.pi],
+    #          [0.38, 0.32, 0.7*np.pi],
+    #          [0.28, 0.18, 0.2*np.pi]]
+    # geom_obs = [[[0, 0.08], [0.04*np.sqrt(3), -0.04], [-0.04*np.sqrt(3), -0.04]], \
+    #             [[0.03, 0.03*np.sqrt(3)], [0.06, 0], [0.03, -0.03*np.sqrt(3)], [-0.03, -0.03*np.sqrt(3)], [-0.06, 0], [-0.03, 0.03*np.sqrt(3)]], \
+    #             [[0.04, 0.05], [-0.04, 0.05], [-0.06, -0.05], [0.06, -0.05]]]
+    # shape_obs = ['polygon', 'polygon', 'polygon']
+    # type_obs = [0, 0, 0]
+    # A_list = [None for i in range(num_obs)]
+
+    ## real robot experiment
+    # quat_obs = [[-0.01064, -0.014352, -0.0031915, 0.99984],
+    #             [0.0013715, -0.0074795, 0.38732, 0.92192],
+    #             [-0.012429, -0.00096422, 0.42742, 0.90397]]
+    # x_obs = [[0.5815, -0.0181],
+    #          [0.6836, 0.1534],
+    #          [0.4941, -0.1999]]
+    # theta_obs = R.from_quat(quat_obs).as_euler('xyz')
+    # x_obs = np.concatenate((x_obs, theta_obs[:, 2].reshape(-1, 1)), axis=1).tolist()
+    # A_list = [None for i in range(num_obs)]
+
+    # create planning scene and save to file
+    # --------------------------------------------------
+    # pkl_file = '/home/yongpeng/research/R3T_shared/data/debug/real_obstacle_avoidance_robot/planning_scene_robot.pkl'
+
     dt_contact = 0.05
+
+    # # scene_pkl = {'target': {'x': x_init, 'geom': geom_default},
+    # #              'obstacle': {'num': num_obs,
+    # #                           'miu': [miu_default for i in range(num_obs)],
+    # #                           'geom': [geom_default for i in range(num_obs)],
+    # #                           'A_list': [lim_surf_A_obs for i in range(num_obs)],
+    # #                           'x': x_obs},
+    # #              'contact': {'dt': dt_contact}}
+
+    # scene_pkl = {'target': {'x': x_init, 'geom': [0.08, 0.15]},
+    #              'obstacle': {'num': num_obs,
+    #                           'miu': [miu_default for i in range(num_obs)],
+    #                           'geom': [[0.07, 0.122], [0.1, 0.102], [0.1, 0.102]],
+    #                           'A_list': [A([0.07, 0.122]).toarray(), A([0.1, 0.102]).toarray(), A([0.1, 0.102]).toarray()],
+    #                           'type': [1, 0, 0],
+    #                           'x': x_obs},
+    #              'contact': {'dt': dt_contact}}
+
     scene_pkl = {'target': {'x': x_init, 'geom': geom_default},
                  'obstacle': {'num': num_obs,
                               'miu': [miu_default for i in range(num_obs)],
-                              'geom': [geom_default for i in range(num_obs)],
-                              'A_list': [lim_surf_A_obs for i in range(num_obs)],
+                              'geom': geom_obs,
+                              'A_list': A_list,
+                              'type': type_obs,
+                              'shape': shape_obs,
                               'x': x_obs},
                  'contact': {'dt': dt_contact}}
 
     pickle.dump(scene_pkl, open(pkl_file, 'wb'))
+
+    pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_4.pkl'
     scene, basic = load_planning_scene_from_file(pkl_file)
     fig, ax = visualize_scene(scene, alpha=0.25)
     plt.show()
-    """
+    
+    exit(0)
 
     ## -------------------------------------------------
     ## TEST UPDATE CONTACT CONFIGURATION
