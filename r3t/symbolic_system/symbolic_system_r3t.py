@@ -1020,7 +1020,7 @@ class SymbolicSystem_Hybrid_R3T_Contact(R3T_Hybrid_Contact):
                                     dim_u=self.sys.dim_u,
                                     print_flag=print_flag)
 
-    def get_plan_anim_raw_data(self, data_root=None, idx=0):
+    def get_plan_anim_raw_data(self, data_root=None, idx=None):
         """
         Get the raw data for plan animation
         """
@@ -1028,7 +1028,7 @@ class SymbolicSystem_Hybrid_R3T_Contact(R3T_Hybrid_Contact):
             with open(os.path.join(data_root, '{0}.pkl'.format(idx)), 'wb') as f:
                 pickle.dump([], f)
                 return
-                
+
         X_slider = []
         U_slider = []
         X_pusher = []
@@ -1084,10 +1084,14 @@ class SymbolicSystem_Hybrid_R3T_Contact(R3T_Hybrid_Contact):
         # except:
         #     pass
 
-        with open(os.path.join(data_root, '{0}.pkl'.format(idx)), 'wb') as f:
-            pickle.dump(data_collection, f)
+        if idx is None:
+            with open(os.path.join(data_root, 'planned_path.pkl'), 'wb') as f:
+                pickle.dump(data_collection, f)
+        else:
+            with open(os.path.join(data_root, '{0}.pkl'.format(idx)), 'wb') as f:
+                pickle.dump(data_collection, f)
 
-    def get_control_nom_data(self):
+    def get_control_nom_data(self, data_root):
         """
         Get the nominal data for tracking control
         """
@@ -1165,12 +1169,12 @@ class SymbolicSystem_Hybrid_R3T_Contact(R3T_Hybrid_Contact):
             U_slider_seg.clear()
             contact_face_seg.clear()
 
-        data_root = '/home/yongpeng/research/R3T_shared/data/debug'
-        timestamp = self.debugger.timestamp
-        try:
-            os.mkdir(os.path.join(data_root, timestamp))
-        except:
-            pass
+        # data_root = '/home/yongpeng/research/R3T_shared/data/debug'
+        # timestamp = self.debugger.timestamp
+        # try:
+        #     os.mkdir(os.path.join(data_root, timestamp))
+        # except:
+        #     pass
 
-        with open(os.path.join(data_root, timestamp, 'path_seg.pkl'), 'wb') as f:
+        with open(os.path.join(data_root, 'path_seg.pkl'), 'wb') as f:
             pickle.dump(path_seg_list, f)

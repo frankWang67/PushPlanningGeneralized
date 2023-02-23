@@ -317,12 +317,12 @@ class R3T_Hybrid_Contact:
         new_node.set_planning_scene(new_planning_scene)
 
         ## FOR DEBUG
-        # from r3t.polygon.scene import visualize_scene
-        # plt.clf()
-        # fig, ax = visualize_scene(new_planning_scene, alpha=0.75)
-        # plt.savefig('/home/yongpeng/下载/figure/debug/{0}_{1}.png'.format(hash(str(new_state_with_psic[:3])), \
-        #                                                                  hash(str(nearest_node.state[:3]))))
-        # plt.close()
+        from r3t.polygon.scene import visualize_scene
+        plt.clf()
+        fig, ax = visualize_scene(new_planning_scene, alpha=0.75, xlim=[0.26, 0.80], ylim=[-0.09, 0.45])
+        plt.savefig('/home/yongpeng/下载/figure/debug/{0}_{1}.png'.format(hash(str(new_state_with_psic[:3])), \
+                                                                         hash(str(nearest_node.state[:3]))))
+        plt.close()
 
         # TIME CONSUMING
         # self.debugger.add_node_data(new_node)

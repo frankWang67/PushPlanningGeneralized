@@ -1429,16 +1429,26 @@ class PushDTHybridSystem:
 
 
 if __name__ == '__main__':
+    ## import libraries for running test
+    ## ----------------------------------------------------
+    import time
+    from matplotlib import pyplot as plt
+    from r3t.symbolic_system.symbolic_system_r3t import PolytopeReachableSet
+    from pypolycontain.visualization.visualize_2D import visualize_3D_AH_polytope_push_planning
+    ## ----------------------------------------------------
+
+
     dyn = PushDTHybridSystem(quad_cost_input=[0.001, 0.001, 5e-6])  # test with default value
-    import pdb; pdb.set_trace()
     
     distance_scaling_array = np.array([1.0, 1.0, 0.0695])
-    polytope_parent_state = np.array([0.345, 0.165, -0.99*np.pi, 0.9*np.pi])
-    polytope_parent_state2 = np.array([0.28, 0.24, -0.6*np.pi, -0.9*np.pi])
+    # polytope_parent_state = np.array([0.345, 0.165, -0.99*np.pi, 0.9*np.pi])
+    polytope_parent_state = np.array([0.345, 0.165, -2.8, 0.9*np.pi])
+    # polytope_parent_state2 = np.array([0.28, 0.24, -0.6*np.pi, -0.9*np.pi])
+    polytope_parent_state2 = np.array([0.32, 0.20, -2.5, -0.9*np.pi])
 
-    import time
 
     ## TEST-1 (PushDTHybridSystem._get_contact_face_from_state)
+    ## ----------------------------------------------------
     # start_time = time.time()
     # print(dyn._get_contact_face_from_state(np.array([2.3419, 0.8627, 0., 0.25*np.pi])))  # front
     # print(dyn._get_contact_face_from_state(np.array([1.3419, -0.8627, 0.25*np.pi, 0.59*np.pi])))  # left
@@ -1453,7 +1463,9 @@ if __name__ == '__main__':
     # print('test get_contact_face_from_state, time_cost={0}'.format(time.time() - start_time))
     ## ----------------------------------------------------
 
+
     ## TEST-2 (PushDTHybridSystem._get_unilateral_sliding_flag_from_state)
+    ## ----------------------------------------------------
     # start_time = time.time()
     # print(dyn._get_unilateral_sliding_flag_from_state(np.array([2.3419, 0.8627, 0., 1.0201]), contact_face='front'))  # (True, 'sliding_right')
     # print(dyn._get_unilateral_sliding_flag_from_state(np.array([2.3419, 0.8627, 0., 0.9307]), contact_face='front'))  # (False, None)
@@ -1463,20 +1475,23 @@ if __name__ == '__main__':
     # print('test get_unilateral_sliding_flag_from_state, time_cost={0}'.format(time.time() - start_time))
     ## ----------------------------------------------------
 
+
     ## TEST-3 (PushDTHybridSystem._get_unilateral_sliding_flag_from_state)
+    ## ----------------------------------------------------
     # start_time = time.time()
-    # polytope_list1 = dyn.get_reachable_polytopes(state=np.array([0.345, 0.165, -0.99*np.pi, 0.8*np.pi]), u=np.array([0.0, 0.0, 0.0]))
+    # polytope_list0 = dyn.get_reachable_polytopes(state=np.array([0.345, 0.165, 0.0*np.pi, 0.25*np.pi]), u=np.array([0.0, 0.0, 0.0]))
+    polytope_list1 = dyn.get_reachable_polytopes(state=np.array([0.345, 0.165, -0.99*np.pi, 0.8*np.pi]), u=np.array([0.0, 0.0, 0.0]))
     # polytope_list2 = dyn.get_reachable_polytopes(state=polytope_parent_state, u=np.array([0.0, 0.0, 0.0]))
     # polytope_list3 = dyn.get_reachable_polytopes(state=np.array([0.345, 0.165, -0.99*np.pi, 1.0*np.pi]), u=np.array([0.0, 0.0, 0.0]))
     # polytope_list4 = dyn.get_reachable_polytopes(state=np.array([0.345, 0.165, -0.99*np.pi, -0.9*np.pi]), u=np.array([0.0, 0.0, 0.0]))
     # polytope_list5 = dyn.get_reachable_polytopes(state=np.array([0.345, 0.165, -0.99*np.pi, -0.8*np.pi]), u=np.array([0.0, 0.0, 0.0]))
-    ## ----------------------------------------------------
 
     # print('length of polytope list: {0}'.format(len(polytope_list)))
     # print('test get_unilateral_sliding_flag_from_state, time_cost={0}'.format(time.time() - start_time))
     # print('test get_reachable_polytopes, time_cost={0}'.format(time.time() - start_time))
-    from pypolycontain.visualization.visualize_2D import visualize_3D_AH_polytope_push_planning
-    from matplotlib import pyplot as plt
+    fig = plt.figure()
+    ax=fig.add_subplot(111,projection='3d')
+    # fig, ax = visualize_3D_AH_polytope_push_planning(polytope_list0, dyn, color='red', alpha=0.2, distance_scaling_array=distance_scaling_array)
     # fig, ax = visualize_3D_AH_polytope_push_planning(polytope_list1, dyn, color='red', alpha=0.2, distance_scaling_array=distance_scaling_array)
     # fig, ax = visualize_3D_AH_polytope_push_planning(polytope_list2, dyn, fig, ax, color='orange', alpha=0.5, distance_scaling_array=distance_scaling_array)
     # fig, ax = visualize_3D_AH_polytope_push_planning(polytope_list3, dyn, fig, ax, color='yellow', alpha=0.5, distance_scaling_array=distance_scaling_array)
@@ -1488,7 +1503,7 @@ if __name__ == '__main__':
     # fig3, ax3 = visualize_ND_AH_polytope(list_of_AH_polytopes=polytope_list, dim1=0, dim2=2, N=360, epsilon=3e-4)
     # print('test get_reachable_polytopes & visualize_ND_AH_polytope, time_cost={0}'.format(time.time() - start_time))
     # plt.show()
-    # from pypolycontain.visualization.visualize_2D import visualize_ND_AH_polytope
+    from pypolycontain.visualization.visualize_2D import visualize_ND_AH_polytope
     # E_mat = dyn.E_mat['sliding_right']
     # Xi_mat = dyn.Xi_mat['sliding_right']
     # h_polytope = H_polytope(H=E_mat, h=Xi_mat)
@@ -1499,7 +1514,9 @@ if __name__ == '__main__':
     # plt.show()
     ## ----------------------------------------------------
 
+
     ## TEST-4 (pypolycontain.lib.operations.distance_point_polytope)
+    ## ----------------------------------------------------
     # start_time = time.time()
     # from pypolycontain.lib.operations import distance_point_polytope
     # distance, nearest_point = distance_point_polytope(polytope_list[0], np.array([0.24, 0.925, 0.5*np.pi]), ball='infinity', distance_scaling_array=distance_scaling_array)
@@ -1507,7 +1524,9 @@ if __name__ == '__main__':
     # print('test distance_point_polytope, time_cost={0}'.format(time.time() - start_time))
     ## ----------------------------------------------------
 
+
     ## TEST-5 (pypolycontain.lib.common.utils.duplicate_state_with_multiple_azimuth_angle)
+    ## ----------------------------------------------------
     # start_time = time.time()
     # print(duplicate_state_with_multiple_azimuth_angle(origin_state=np.array([0.3418, 0.1792, 0.2314])))
     # print(duplicate_state_with_multiple_azimuth_angle(origin_state=np.array([0.3418, 0.1792, 1.5687])))
@@ -1515,7 +1534,9 @@ if __name__ == '__main__':
     # print('test duplicate_state_with_multiple_azimuth_angle, time_cost={0}'.format(time.time() - start_time))
     ## ----------------------------------------------------
 
+
     ## TEST-6 (pypolycontain.lib.operation.distance_point_polytope_with_multiple_azimuth)
+    ## ----------------------------------------------------
     # start_time = time.time()
     # query_point = np.array([0.3418, 0.1792, 3.1398])
     # distance, nearest_point, modified_query_point = distance_point_polytope_with_multiple_azimuth(polytope_list1[6], query_point, ball='l2', distance_scaling_array=distance_scaling_array, return_modifed_query_point=True)
@@ -1530,7 +1551,9 @@ if __name__ == '__main__':
     # plt.show()
     ## ----------------------------------------------------
 
+
     ## TEST-7 (PushDTHybridSystem.collision_free_forward_simulation)
+    ## ----------------------------------------------------
     # from diversipy.polytope import sample as poly_sample
     # start_time = time.time()
     # num_input_samples = 20
@@ -1570,9 +1593,10 @@ if __name__ == '__main__':
     # print('test collision_free_forward_simulation, time_cost={0}'.format(time.time() - start_time))
     ## ----------------------------------------------------
 
+
     ## TEST-8 (PolytopeReachableSet.find_closest_state_with_hybrid_dynamics)
+    ## ----------------------------------------------------
     # start_time = time.time()
-    from r3t.symbolic_system.symbolic_system_r3t import PolytopeReachableSet
     # reachable_set = PolytopeReachableSet(parent_state=polytope_parent_state,
     #                                      polytope_list=polytope_list2,
     #                                      sys=dyn,
@@ -1603,150 +1627,160 @@ if __name__ == '__main__':
     # plt.show()
     ## ----------------------------------------------------
 
+
     ## TEST-9 (PushDTHybridSystem.get_reachable_polytopes_with_variable_psic)
-    # start_time = time.time()
-    # polytope_list = dyn.get_reachable_polytopes_with_variable_psic(state=polytope_parent_state, u=np.array([0.0, 0.0, 0.0]))
-    # fig, ax = visualize_3D_AH_polytope_push_planning(polytope_list, dyn, color='red', alpha=0.2, distance_scaling_array=distance_scaling_array)
-    # query_point = np.array([0.347, 0.170, 3.1])
-    # reachable_set = PolytopeReachableSet(parent_state=polytope_parent_state,
-    #                                      polytope_list=polytope_list,
-    #                                      sys=dyn,
-    #                                      distance_scaling_array=distance_scaling_array)
+    ## ----------------------------------------------------
+    start_time = time.time()
+    polytope_list = dyn.get_reachable_polytopes_with_variable_psic(state=polytope_parent_state, u=np.array([0.0, 0.0, 0.0]))
+    fig, ax = visualize_3D_AH_polytope_push_planning(polytope_list, dyn, color='red', alpha=0.2, distance_scaling_array=distance_scaling_array)
+    query_point = np.array([0.347, 0.170, 3.1])
+    reachable_set = PolytopeReachableSet(parent_state=polytope_parent_state,
+                                         polytope_list=polytope_list,
+                                         sys=dyn,
+                                         distance_scaling_array=distance_scaling_array)
 
-    # import pdb; pdb.set_trace()
+    new_state, discard, true_dynamics_path, nearest_polytope = reachable_set.find_closest_state_with_hybrid_dynamics(query_point=query_point,
+                                                                                                                     Z_obs_list=None,
+                                                                                                                     duplicate_search_azimuth=True)
+    modified_query_point = reachable_set.get_state_in_set_with_correct_azimuth(query_point, nearest_polytope)
+    plan_success_flag, cost_to_go, state_list, reached_state, approximate_input = \
+        reachable_set.plan_path_in_set_with_hybrid_dynamics(goal_state=new_state,
+                                                            closest_polytope=nearest_polytope,
+                                                            Z_obs_list=None)
+    state_array = np.array(state_list)
+    ax.scatter(new_state[0], new_state[1], new_state[2], c='deepskyblue', marker='o', s=20, label='x_near')
+    # ax.scatter(query_point[0], query_point[1], query_point[2], c='forestgreen', marker='o', s=20, label='x_rand')
+    ax.scatter(modified_query_point[0], modified_query_point[1], modified_query_point[2], c='orange', marker='o', s=20, label='x_rand')
+    ax.scatter(reached_state[0], reached_state[1], reached_state[2], c='deeppink', marker='o', s=20, label='x_reach0')
+    ax.plot(state_array[:, 0], state_array[:, 1], state_array[:, 2], marker='x', markersize=5, linestyle=':')
 
-    # new_state, discard, true_dynamics_path, nearest_polytope = reachable_set.find_closest_state_with_hybrid_dynamics(query_point=query_point,
-    #                                                                                                                  Z_obs_list=None,
-    #                                                                                                                  duplicate_search_azimuth=True)
-    # modified_query_point = reachable_set.get_state_in_set_with_correct_azimuth(query_point, nearest_polytope)
-    # plan_success_flag, cost_to_go, state_list, reached_state, approximate_input = \
-    #     reachable_set.plan_path_in_set_with_hybrid_dynamics(goal_state=new_state,
-    #                                                         closest_polytope=nearest_polytope,
-    #                                                         Z_obs_list=None)
-    # state_array = np.array(state_list)
-    # ax.scatter(new_state[0], new_state[1], new_state[2], c='deepskyblue', marker='o', s=20, label='x_near')
-    # # ax.scatter(query_point[0], query_point[1], query_point[2], c='forestgreen', marker='o', s=20, label='x_rand')
-    # ax.scatter(modified_query_point[0], modified_query_point[1], modified_query_point[2], c='orange', marker='o', s=20, label='x_rand')
-    # ax.scatter(reached_state[0], reached_state[1], reached_state[2], c='deeppink', marker='o', s=20, label='x_reach0')
-    # ax.plot(state_array[:, 0], state_array[:, 1], state_array[:, 2], marker='x', markersize=5, linestyle=':')
-
-    # print('query point: {0}\n nearest point: {1}\n modified query point: {2}\n reached point: {3}' \
-    #             .format(query_point, new_state, modified_query_point, reached_state))
-    # print('state list: ', state_list)
-    # # print('nearest polytope: ', nearest_polytope.mode_string)
-    # print('test get_reachable_polytopes_with_variable_psic, time_cost={0}'.format(time.time() - start_time))
-    # plt.legend()
-    # plt.show()
-
-    ## TEST-10 (PolytopeReachableSetTree.nearest_k_neighbor_ids)
-    # from r3t.symbolic_system.symbolic_system_r3t import PolytopeReachableSetTree, SymbolicSystem_Hybrid_R3T
-    # start_time = time.time()
-    # poly_set_tree = PolytopeReachableSetTree(distance_scaling_array=distance_scaling_array)
-    # state_id_to_state = {}
-
-    # state1 = polytope_parent_state
-    # state2 = polytope_parent_state2
-    # state1_id = hash(str(state1[:-1]))
-    # state2_id = hash(str(state2[:-1]))
-    # state_id_to_state[state1_id] = state1
-    # state_id_to_state[state2_id] = state2
-
-    # # query state without psic
-    # query_state = np.array([0.29, 0.232, -2.0])
-    # # query_state = np.array([0.34228213, 0.18011015, -3.19628698])
-
-    # sys_r3t = SymbolicSystem_Hybrid_R3T(init_state=polytope_parent_state,
-    #                                     sys=dyn,
-    #                                     sampler=None,
-    #                                     step_size=5e-2,
-    #                                     distance_scaling_array=distance_scaling_array,
-    #                                     nonlinear_dynamic_step_size=1e-2)
-    # compute_reachable_set = sys_r3t.compute_reachable_set_func
-
-    # reachable_set1 = compute_reachable_set(state=state1, u=np.array([0., 0., 0.]))
-    # reachable_set2 = compute_reachable_set(state=state2, u=np.array([0., 0., 0.]))
-    # poly_set_tree.insert(state1_id, reachable_set1)
-    # poly_set_tree.insert(state2_id, reachable_set2)
-    # nearest_id_list = poly_set_tree.nearest_k_neighbor_ids(query_state=query_state,
-    #                                                        k=1,
-    #                                                        duplicate_search_azimuth=True)
-    # total_polytope_list = []
-    # total_polytope_list.extend(reachable_set1.polytope_list)
-    # total_polytope_list.extend(reachable_set2.polytope_list)
-    # closest_parent_state = state_id_to_state[nearest_id_list[0]]
-    
-    # fig, ax = visualize_3D_AH_polytope_push_planning(total_polytope_list, dyn, color='red', alpha=0.2, distance_scaling_array=distance_scaling_array)
-    # ax.scatter(closest_parent_state[0], closest_parent_state[1], closest_parent_state[2], c='darkgreen', marker='o', s=50, label='x_parent')
-
-    # # nearest reachable set
-    # reachable_set = poly_set_tree.id_to_reachable_sets[nearest_id_list[0]]
-    # new_state, discard, true_dynamics_path, nearest_polytope = reachable_set.find_closest_state_with_hybrid_dynamics(query_point=query_state,
-    #                                                                                                                  Z_obs_list=None,
-    #                                                                                                                  duplicate_search_azimuth=True)
-    # ax.scatter(new_state[0], new_state[1], new_state[2], c='deepskyblue', marker='o', s=20, label='x_near')
-    # ax.plot([query_state[0], new_state[0]],
-    #         [query_state[1], new_state[1]],
-    #         [query_state[2], new_state[2]], linestyle=':')
-
-    # # modify the azimuth angle until in set
-    # modified_query_point = reachable_set.get_state_in_set_with_correct_azimuth(query_state, nearest_polytope)
-    # ax.scatter(modified_query_point[0], modified_query_point[1], modified_query_point[2], c='darkorange', marker='o', s=20, label='x_rand')
-    
-    # ## approximate connect
-    # plan_success_flag, cost_to_go, state_list, reached_state, approximate_input = \
-    #     reachable_set.plan_path_in_set_with_hybrid_dynamics(goal_state=new_state,
-    #                                                         closest_polytope=nearest_polytope,
-    #                                                         Z_obs_list=None)
-    # state_array = np.array(state_list)
-    # ax.scatter(reached_state[0], reached_state[1], reached_state[2], c='deeppink', marker='o', s=20, label='x_reach0')
-    # ax.plot(state_array[:, 0], state_array[:, 1], state_array[:, 2], color='orange', marker='x', markersize=5, linestyle=':')
-    # print('input array: ', approximate_input)
-
-    # ## exact connect
-    # plan_success_flag, cost_to_go, state_list, reached_state, input_list = \
-    #     reachable_set.plan_exact_path_in_set_with_hybrid_dynamics(goal_state=new_state,
-    #                                                               closest_polytope=nearest_polytope,
-    #                                                               Z_obs_list=None)
-    # state_array = np.array(state_list)
-    # ax.scatter(reached_state[0], reached_state[1], reached_state[2], c='deeppink', marker='o', s=20, label='x_reach1')
-    # ax.plot(state_array[:, 0], state_array[:, 1], state_array[:, 2], color='cyan', marker='x', markersize=5, linestyle=':')
-    # print('input array: ', input_list)
-    # print('test nearest_k_neighbor_ids, time_cost={0}'.format(time.time() - start_time))
-    # import pdb; pdb.set_trace()
-
-    # plt.legend()
-    # plt.show()
+    print('query point: {0}\n nearest point: {1}\n modified query point: {2}\n reached point: {3}' \
+                .format(query_point, new_state, modified_query_point, reached_state))
+    print('state list: ', state_list)
+    # print('nearest polytope: ', nearest_polytope.mode_string)
+    print('test get_reachable_polytopes_with_variable_psic, time_cost={0}'.format(time.time() - start_time))
+    plt.legend()
+    plt.show()
     ## ----------------------------------------------------
 
-    ## TEST-10 (PolytopeReachableSet.contains, PolytopeReachableSet.contains_goal)
-    root_state = np.array([0.25, 0.05, 0.5*np.pi, 1.0*np.pi])
-    goal_state = np.array([0.25, 0.45, 0.5*np.pi])
-    empty_input = np.zeros(3,)
-    plan_step_size = 0.05
-    sim_step_size = 0.01
 
-    polytope_list = dyn.get_reachable_polytopes_with_variable_psic(root_state, empty_input, plan_step_size, use_convex_hull=True)
-    reachable_set = PolytopeReachableSet(parent_state=None, polytope_list=polytope_list, sys=dyn, epsilon=0.001, contains_goal_function=None,
-                                         cost_to_go_function=None, mode_consistent_sampling_bias=0., distance_scaling_array=distance_scaling_array,
-                                         deterministic_next_state=None, use_true_reachable_set=False, reachable_set_step_size=plan_step_size,
-                                         nonlinear_dynamic_step_size=sim_step_size)
-    fig, ax = visualize_3D_AH_polytope_push_planning(polytope_list, dyn, color='red', alpha=0.01, distance_scaling_array=distance_scaling_array)
-    ax.scatter(root_state[0], root_state[1], root_state[2], color='blue', s=20)
-    ax.scatter(goal_state[0], goal_state[1], goal_state[2], color='green', s=20)
+    ## TEST-10 (PolytopeReachableSetTree.nearest_k_neighbor_ids)
+    ## ----------------------------------------------------
+    from r3t.symbolic_system.symbolic_system_r3t import PolytopeReachableSetTree, SymbolicSystem_Hybrid_R3T
+    start_time = time.time()
+    poly_set_tree = PolytopeReachableSetTree(distance_scaling_array=distance_scaling_array)
+    state_id_to_state = {}
 
+    state1 = polytope_parent_state
+    state2 = polytope_parent_state2
+    state1_id = hash(str(state1[:-1]))
+    state2_id = hash(str(state2[:-1]))
+    state_id_to_state[state1_id] = state1
+    state_id_to_state[state2_id] = state2
+
+    # query state without psic
+    query_state = np.array([0.29, 0.232, -2.0])
+    # query_state = np.array([0.34228213, 0.18011015, -3.19628698])
+
+    sys_r3t = SymbolicSystem_Hybrid_R3T(init_state=polytope_parent_state,
+                                        sys=dyn,
+                                        sampler=None,
+                                        goal_sampling_bias=0.1,
+                                        mode_consistent_sampling_bias=0.2,
+                                        step_size=5e-2,
+                                        distance_scaling_array=distance_scaling_array,
+                                        nonlinear_dynamic_step_size=1e-2)
+    compute_reachable_set = sys_r3t.compute_reachable_set_func
+
+    reachable_set1 = compute_reachable_set(state=state1, u=np.array([0., 0., 0.]))
+    reachable_set2 = compute_reachable_set(state=state2, u=np.array([0., 0., 0.]))
+    poly_set_tree.insert(state1_id, reachable_set1)
+    poly_set_tree.insert(state2_id, reachable_set2)
+    nearest_id_list = poly_set_tree.nearest_k_neighbor_ids(query_state=query_state,
+                                                           k=1,
+                                                           duplicate_search_azimuth=True)
+    total_polytope_list = []
+    total_polytope_list.extend(reachable_set1.polytope_list)
+    total_polytope_list.extend(reachable_set2.polytope_list)
+    closest_parent_state = state_id_to_state[nearest_id_list[0]]
+    
+    fig, ax = visualize_3D_AH_polytope_push_planning(total_polytope_list, dyn, color='red', alpha=0.2, distance_scaling_array=distance_scaling_array)
+    ax.scatter(closest_parent_state[0], closest_parent_state[1], closest_parent_state[2], c='darkgreen', marker='o', s=50, label='x_parent')
+
+    # nearest reachable set
+    reachable_set = poly_set_tree.id_to_reachable_sets[nearest_id_list[0]]
+    new_state, discard, true_dynamics_path, nearest_polytope = reachable_set.find_closest_state_with_hybrid_dynamics(query_point=query_state,
+                                                                                                                     Z_obs_list=None,
+                                                                                                                     duplicate_search_azimuth=True)
+    ax.scatter(new_state[0], new_state[1], new_state[2], c='deepskyblue', marker='o', s=20, label='x_near')
+    ax.plot([query_state[0], new_state[0]],
+            [query_state[1], new_state[1]],
+            [query_state[2], new_state[2]], linestyle=':')
+
+    # modify the azimuth angle until in set
+    modified_query_point = reachable_set.get_state_in_set_with_correct_azimuth(query_state, nearest_polytope)
+    ax.scatter(modified_query_point[0], modified_query_point[1], modified_query_point[2], c='darkorange', marker='o', s=20, label='x_rand')
+    
+    ## approximate connect
+    plan_success_flag, cost_to_go, state_list, reached_state, approximate_input = \
+        reachable_set.plan_path_in_set_with_hybrid_dynamics(goal_state=new_state,
+                                                            closest_polytope=nearest_polytope,
+                                                            Z_obs_list=None)
+    state_array = np.array(state_list)
+    ax.scatter(reached_state[0], reached_state[1], reached_state[2], c='deeppink', marker='o', s=20, label='x_reach0')
+    ax.plot(state_array[:, 0], state_array[:, 1], state_array[:, 2], color='orange', marker='x', markersize=5, linestyle=':')
+    print('input array: ', approximate_input)
+
+    ## exact connect
+    plan_success_flag, other_info = \
+        reachable_set.plan_exact_path_in_set_with_hybrid_dynamics(goal_state=new_state,
+                                                                  closest_polytope=nearest_polytope,
+                                                                  Z_obs_list=None)
+    cost_to_go, state_list, reached_state, input_list = other_info
+
+    state_array = np.array(state_list)
+    ax.scatter(reached_state[0], reached_state[1], reached_state[2], c='deeppink', marker='o', s=20, label='x_reach1')
+    ax.plot(state_array[:, 0], state_array[:, 1], state_array[:, 2], color='cyan', marker='x', markersize=5, linestyle=':')
+    print('input array: ', input_list)
+    print('test nearest_k_neighbor_ids, time_cost={0}'.format(time.time() - start_time))
     import pdb; pdb.set_trace()
-    # contains_goal, closest_polytope, exact_path_info = reachable_set.contains_goal(goal_state)
 
-    num_samples = 800
-    num_contains = 0
-    for i in range(num_samples):
-        if i % 100 == 0:
-            print('sampling: {0}/{1}'.format(i,num_samples))
-        new_sample = np.random.uniform([0.235, 0.035, 1.3], [0.265, 0.065, 1.8])
-        contain_flag, proj_state = reachable_set.contains(new_sample, return_closest_state=True)
-        if contain_flag:
-            num_contains += 1
-        ax.scatter(proj_state[0], proj_state[1], proj_state[2], color='purple', s=5)
-    print('{0}/{1} contained in polytopes'.format(num_contains,num_samples))
-
+    plt.legend()
     plt.show()
+    ## ----------------------------------------------------
+
+
+    ## TEST-11 (PolytopeReachableSet.contains, PolytopeReachableSet.contains_goal)
+    ## ----------------------------------------------------
+    # root_state = np.array([0.25, 0.05, 0.5*np.pi, 1.0*np.pi])
+    # goal_state = np.array([0.25, 0.45, 0.5*np.pi])
+    # empty_input = np.zeros(3,)
+    # plan_step_size = 0.05
+    # sim_step_size = 0.01
+
+    # polytope_list = dyn.get_reachable_polytopes_with_variable_psic(root_state, empty_input, plan_step_size, use_convex_hull=True)
+    # reachable_set = PolytopeReachableSet(parent_state=None, polytope_list=polytope_list, sys=dyn, epsilon=0.001, contains_goal_function=None,
+    #                                      cost_to_go_function=None, mode_consistent_sampling_bias=0., distance_scaling_array=distance_scaling_array,
+    #                                      deterministic_next_state=None, use_true_reachable_set=False, reachable_set_step_size=plan_step_size,
+    #                                      nonlinear_dynamic_step_size=sim_step_size)
+    # fig, ax = visualize_3D_AH_polytope_push_planning(polytope_list, dyn, color='red', alpha=0.01, distance_scaling_array=distance_scaling_array)
+    # ax.scatter(root_state[0], root_state[1], root_state[2], color='blue', s=20)
+    # ax.scatter(goal_state[0], goal_state[1], goal_state[2], color='green', s=20)
+
+    # import pdb; pdb.set_trace()
+    # # contains_goal, closest_polytope, exact_path_info = reachable_set.contains_goal(goal_state)
+
+    # num_samples = 800
+    # num_contains = 0
+    # for i in range(num_samples):
+    #     if i % 100 == 0:
+    #         print('sampling: {0}/{1}'.format(i,num_samples))
+    #     new_sample = np.random.uniform([0.235, 0.035, 1.3], [0.265, 0.065, 1.8])
+    #     contain_flag, proj_state = reachable_set.contains(new_sample, return_closest_state=True)
+    #     if contain_flag:
+    #         num_contains += 1
+    #     ax.scatter(proj_state[0], proj_state[1], proj_state[2], color='purple', s=5)
+    # print('{0}/{1} contained in polytopes'.format(num_contains,num_samples))
+
+    # plt.show()
+    ## ----------------------------------------------------

@@ -186,7 +186,8 @@ def collision_check_and_contact_reconfig(basic:ContactBasic, scene:PlanningScene
     # in contact, can extend
     return True, True, new_scene
 
-def visualize_scene(scene:PlanningScene, fig=None, ax=None, alpha=1.0):
+def visualize_scene(scene:PlanningScene, fig=None, ax=None, alpha=1.0, \
+                    xlim=[0.0, 0.5], ylim=[0.0, 0.5]):
     """
     Visualize the planning scene
     :param scene: the planning scene
@@ -204,8 +205,8 @@ def visualize_scene(scene:PlanningScene, fig=None, ax=None, alpha=1.0):
     target_patch = patches.Polygon(np.array(scene.target_polygon.exterior.coords.xy).T, facecolor='#1f77b4', alpha=alpha, edgecolor='black')
     ax.add_patch(target_patch)
 
-    plt.xlim([0.0, 0.5])
-    plt.ylim([0.0, 0.5])
+    plt.xlim(xlim)
+    plt.ylim(ylim)
 
     # plt.xlim([0.3, 0.9])
     # plt.ylim([-0.3, 0.3])
@@ -303,41 +304,41 @@ if __name__ == '__main__':
     #         A_list.append(None)
 
     ## scene3
-    pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_3.pkl'
-    num_obs = 6
-    x_obs = [[0.10, 0.25, 0.3*np.pi],
-             [0.24, 0.25, -0.2*np.pi],
-             [0.08, 0.08, 0.0*np.pi],
-             [0.10, 0.42, 0.0*np.pi],
-             [0.33, 0.33, 0.32*np.pi],
-             [0.40, 0.11, -0.13*np.pi]]
-    geom_obs = [[[0.03, 0.03*np.sqrt(3)], [0.06, 0], [0.03, -0.03*np.sqrt(3)], [-0.03, -0.03*np.sqrt(3)], [-0.06, 0], [-0.03, 0.03*np.sqrt(3)]], \
-                [[0.03, 0.03*np.sqrt(3)], [0.06, 0], [0.03, -0.03*np.sqrt(3)], [-0.03, -0.03*np.sqrt(3)], [-0.06, 0], [-0.03, 0.03*np.sqrt(3)]], \
-                [0.06, 0.06], \
-                [0.06, 0.06], \
-                [0.06, 0.06], \
-                [0.06, 0.06]]
-    shape_obs = ['polygon', 'polygon', 'box', 'box', 'box', 'box']
-    type_obs = [0, 0, 0, 0, 1, 1]
-    A_list = []
-    for i in range(num_obs):
-        if shape_obs[i] == 'box':
-            A_list.append(A(geom_obs[i]).toarray())
-        else:
-            A_list.append(None)
+    # pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_3.pkl'
+    # num_obs = 6
+    # x_obs = [[0.10, 0.25, 0.3*np.pi],
+    #          [0.24, 0.25, -0.2*np.pi],
+    #          [0.08, 0.08, 0.0*np.pi],
+    #          [0.10, 0.42, 0.0*np.pi],
+    #          [0.33, 0.33, 0.32*np.pi],
+    #          [0.40, 0.11, -0.13*np.pi]]
+    # geom_obs = [[[0.03, 0.03*np.sqrt(3)], [0.06, 0], [0.03, -0.03*np.sqrt(3)], [-0.03, -0.03*np.sqrt(3)], [-0.06, 0], [-0.03, 0.03*np.sqrt(3)]], \
+    #             [[0.03, 0.03*np.sqrt(3)], [0.06, 0], [0.03, -0.03*np.sqrt(3)], [-0.03, -0.03*np.sqrt(3)], [-0.06, 0], [-0.03, 0.03*np.sqrt(3)]], \
+    #             [0.06, 0.06], \
+    #             [0.06, 0.06], \
+    #             [0.06, 0.06], \
+    #             [0.06, 0.06]]
+    # shape_obs = ['polygon', 'polygon', 'box', 'box', 'box', 'box']
+    # type_obs = [0, 0, 0, 0, 1, 1]
+    # A_list = []
+    # for i in range(num_obs):
+    #     if shape_obs[i] == 'box':
+    #         A_list.append(A(geom_obs[i]).toarray())
+    #     else:
+    #         A_list.append(None)
 
     ## scene4
-    # pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_4.pkl'
-    # num_obs = 3
-    # x_obs = [[0.08, 0.32, 0.4*np.pi],
-    #          [0.38, 0.32, 0.7*np.pi],
-    #          [0.28, 0.18, 0.2*np.pi]]
-    # geom_obs = [[[0, 0.08], [0.04*np.sqrt(3), -0.04], [-0.04*np.sqrt(3), -0.04]], \
-    #             [[0.03, 0.03*np.sqrt(3)], [0.06, 0], [0.03, -0.03*np.sqrt(3)], [-0.03, -0.03*np.sqrt(3)], [-0.06, 0], [-0.03, 0.03*np.sqrt(3)]], \
-    #             [[0.04, 0.05], [-0.04, 0.05], [-0.06, -0.05], [0.06, -0.05]]]
-    # shape_obs = ['polygon', 'polygon', 'polygon']
-    # type_obs = [0, 0, 0]
-    # A_list = [None for i in range(num_obs)]
+    pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_4.pkl'
+    num_obs = 3
+    x_obs = [[0.08, 0.32, 0.4*np.pi],
+             [0.38, 0.32, 0.7*np.pi],
+             [0.28, 0.18, 0.2*np.pi]]
+    geom_obs = [[[0, 0.08], [0.04*np.sqrt(3), -0.04], [-0.04*np.sqrt(3), -0.04]], \
+                [[0.03, 0.03*np.sqrt(3)], [0.06, 0], [0.03, -0.03*np.sqrt(3)], [-0.03, -0.03*np.sqrt(3)], [-0.06, 0], [-0.03, 0.03*np.sqrt(3)]], \
+                [[0.04, 0.05], [-0.04, 0.05], [-0.06, -0.05], [0.06, -0.05]]]
+    shape_obs = ['polygon', 'polygon', 'polygon']
+    type_obs = [0, 0, 0]
+    A_list = [None for i in range(num_obs)]
 
     ## real robot experiment
     # quat_obs = [[-0.01064, -0.014352, -0.0031915, 0.99984],

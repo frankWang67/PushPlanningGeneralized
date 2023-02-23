@@ -14,32 +14,54 @@ import numpy as np
 from polytope_symbolic_system.common.symbolic_system import *
 from r3t.symbolic_system.symbolic_system_r3t import *
 
+## simple pushaway scene
+#  ---------------------------------------------
+# scene_path_name = '/home/yongpeng/research/R3T_shared/data/debug/real_experiment'
+# scene_file_name = 'obstacle_pushaway_scene.pkl'
+# planning_scene_pkl = os.path.join(scene_path_name, scene_file_name)
+# planning_scene_data = pickle.load(open(planning_scene_pkl, 'rb'))
 
-# scene configuration
-# planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene.pkl'
+# xmin = 0.26
+# xmax = 0.80
+# ymin = -0.06
+# ymax = 0.48
+# thetamin = -np.pi
+# thetamax = np.pi
 
-# test on robot
-planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/debug/real_obstacle_avoidance_robot/planning_scene_robot.pkl'
+# x_goal = [0.34, 0.045, -(1/2)*np.pi]
+# fric_coeff_slider_pusher = 0.1
+#  ---------------------------------------------
 
-# xmin, xmax, ymin, ymax, thetamin, thetamax = 0.0, 0.5, 0.0, 0.5, -np.pi, np.pi
+## circular pushaway scene
+#  ---------------------------------------------
+scene_path_name = '/home/yongpeng/research/R3T_shared/data/debug/real_experiment'
+scene_file_name = 'pushaway_circle_obstacle_scene.pkl'
+planning_scene_pkl = os.path.join(scene_path_name, scene_file_name)
+planning_scene_data = pickle.load(open(planning_scene_pkl, 'rb'))
 
-# test on robot
-xmin, xmax, ymin, ymax, thetamin, thetamax = 0.3, 0.9, -0.3, 0.3, -np.pi, np.pi
+xmin = 0.23
+xmax = 0.77
+ymin = -0.06
+ymax = 0.48
+thetamin = -np.pi
+thetamax = np.pi
+
+x_goal = [0.5, 0.0, -np.pi]
+fric_coeff_slider_pusher = 0.025
+#  ---------------------------------------------
 
 search_space_dimensions = np.array([(xmin, xmax), (ymin, ymax), (thetamin, thetamax)])
-# state_space_obstacles = MultiPolygon()  # empty obstacles
+
 state_space_obstacles = None
 
 # dynamics configuration
-force_limit = 0.15  # old: 0.3
-pusher_vel_limit = 1.5  # dpsic, old: 3.0
-unilateral_sliding_region_width = 0.02  # old: 0.005
-# slider_geometry = [0.07, 0.12, 0.01]
+force_limit = 0.15
+pusher_vel_limit = 1.5
+unilateral_sliding_region_width = 0.02
 
 # test on robot
 slider_geometry = [0.08, 0.15, 0.01]
 
-fric_coeff_slider_pusher = 0.1  # old: 0.3
 fric_coeff_slider_ground = 0.2
 reachable_set_time_step = 0.05
 nonlinear_dynamics_time_step = 0.01
@@ -49,23 +71,16 @@ max_planning_time = 100.0
 max_nodes_in_tree = 1000
 goal_tolerance = 0.001
 goal_sampling_bias = 0.1  # take sample from goal
-mode_consistent_sampling_bias = 0.2  # keey dynamic mode consistent (invariant contact face)
-distance_scaling_array = np.array([1.0, 1.0, 0.0695])
-quad_cost_state = np.diag([1.0, 1.0, 0.0695])
-# quad_cost_input = np.diag([0.01, 0.01, 0.])
+mode_consistent_sampling_bias = 0.8  # keey dynamic mode consistent (invariant contact face)
+distance_scaling_array = np.array([1.0, 1.0, 0.085])
+quad_cost_state = np.diag([1.0, 1.0, 0.085])
 quad_cost_input = np.diag([0.001, 0.001, 5e-6])
 
-# x_init = [0.15, 0.05, 0.]
-# x_goal = [0.40, 0.30, 0.25*np.pi]
-
-# test planning
-# x_init = [0.25, 0.05, 0.5*np.pi]
-# x_goal = [0.25, 0.45, 0.5*np.pi]
-
 # test on robot
-x_init = [0.3836, 0.0014, 0.0011945]
-x_goal = [0.7836, 0.0014, 0.0011945]
+x_init = planning_scene_data['target']['x']
+# x_goal = [0.39, 0.032, -(1/4)*np.pi]
 
+# init contact face: back
 psic_init = np.pi
 
 # underlying functions
@@ -92,25 +107,6 @@ planning_dyn = PushDTHybridSystem(f_lim=force_limit,
                                   quad_cost_input=quad_cost_input,
                                   reachable_set_time_step=reachable_set_time_step,
                                   nldynamics_time_step=nonlinear_dynamics_time_step)
-
-# --------------------------------------------------
-# General Hybrid R3T Algorithm
-# --------------------------------------------------
-
-# planner = SymbolicSystem_Hybrid_R3T(init_state=np.append(x_init, psic_init),
-#                                     sys=planning_dyn,
-#                                     sampler=sampler,
-#                                     goal_sampling_bias=goal_sampling_bias,
-#                                     mode_consistent_sampling_bias=mode_consistent_sampling_bias,
-#                                     step_size=reachable_set_time_step,
-#                                     contains_goal_function=None,
-#                                     cost_to_go_function=cost_to_go,
-#                                     distance_scaling_array=distance_scaling_array,
-#                                     compute_reachable_set=None,
-#                                     use_true_reachable_set=False,
-#                                     nonlinear_dynamic_step_size=nonlinear_dynamics_time_step,
-#                                     use_convex_hull=True,
-#                                     goal_tolerance=goal_tolerance)
 
 # --------------------------------------------------
 # Contact-Aware Hybrid R3T Algorithm
@@ -154,13 +150,6 @@ def test_nearest_polytope_search(planner:R3T_Hybrid, query_state):
     centroid_state = centroid_polytope.t
     return candidate_states, centroid_state, candidate_polytopes, [centroid_polytope]
 
-## extract all states
-# state_dict = planner.state_tree.state_id_to_state
-# state_list = []
-# for state_id, state in state_dict.items():
-#     state_list.append(state.tolist())
-# state_array = np.array(state_list)
-
 # plot states
 ## ----------------------------------------------------
 # control flag
@@ -173,8 +162,6 @@ fig = plt.figure()
 ax = fig.add_subplot(131, projection='3d')
 ax_2d = fig.add_subplot(132)
 ax_time = fig.add_subplot(133)
-
-# ax.scatter(state_array[:, 0], state_array[:, 1], state_array[:, 2], c='orange', s=4)
 
 ## extract tree structure
 r3tree = planner.get_r3t_structure()
@@ -256,8 +243,8 @@ print('Report: mode consistency rate {0}!'.format(np.sum(planner.polytope_data['
 import pdb; pdb.set_trace()
 # planner.debugger.save()
 # planner.get_scene_of_planned_path(save_dir='/home/yongpeng/research/R3T_shared/data/debug/planned_path')
-planner.get_plan_anim_raw_data()
-planner.get_control_nom_data()
+planner.get_plan_anim_raw_data(data_root=scene_path_name)
+planner.get_control_nom_data(data_root=scene_path_name)
 fig.legend()
 fig_data.legend()
 plt.show()

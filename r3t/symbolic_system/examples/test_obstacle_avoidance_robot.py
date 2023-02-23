@@ -14,53 +14,52 @@ import numpy as np
 from polytope_symbolic_system.common.symbolic_system import *
 from r3t.symbolic_system.symbolic_system_r3t import *
 
+# test on robot
+scene_path_name = '/home/yongpeng/research/R3T_shared/data/debug/real_experiment'
+scene_file_name = 'obstacle_avoidance_scene.pkl'
+planning_scene_pkl = os.path.join(scene_path_name, scene_file_name)
+planning_scene_data = pickle.load(open(planning_scene_pkl, 'rb'))
 
-# scene configuration
-# --------------------------------------------------
-# planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_0.pkl'
-planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_1.pkl'
-# planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_2.pkl'
-# planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_3.pkl'
-# planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_4.pkl'
-
-NUM_EXPERIMENTS = 10
-# --------------------------------------------------
-
-xmin, xmax, ymin, ymax, thetamin, thetamax = 0.0, 0.5, 0.0, 0.5, -np.pi, np.pi
+# search space
+xmin = 0.26
+xmax = 0.80
+ymin = -0.14
+ymax = 0.50
+thetamin = -np.pi
+thetamax = np.pi
 
 search_space_dimensions = np.array([(xmin, xmax), (ymin, ymax), (thetamin, thetamax)])
-# state_space_obstacles = MultiPolygon()  # empty obstacles
+
 state_space_obstacles = None
 
 # dynamics configuration
-force_limit = 0.3  # old: 0.3
-pusher_vel_limit = 3.0  # dpsic, old: 3.0
-unilateral_sliding_region_width = 0.005  # old: 0.005
-slider_geometry = [0.07, 0.12, 0.01]
+force_limit = 0.15
+pusher_vel_limit = 1.5
+unilateral_sliding_region_width = 0.02
 
-fric_coeff_slider_pusher = 0.3  # old: 0.3
+# test on robot
+slider_geometry = [0.08, 0.15, 0.01]
+
+fric_coeff_slider_pusher = 0.1
 fric_coeff_slider_ground = 0.2
 reachable_set_time_step = 0.05
 nonlinear_dynamics_time_step = 0.01
 
 # planner_configuration
-max_planning_time = 50.0
+max_planning_time = 100.0
 max_nodes_in_tree = 1000
 goal_tolerance = 0.001
 goal_sampling_bias = 0.1  # take sample from goal
-mode_consistent_sampling_bias = 0.2  # keey dynamic mode consistent (invariant contact face)
-distance_scaling_array = np.array([1.0, 1.0, 0.0695])
-quad_cost_state = np.diag([1.0, 1.0, 0.0695])
-# quad_cost_input = np.diag([0.01, 0.01, 0.])
+mode_consistent_sampling_bias = 0.8  # keey dynamic mode consistent (invariant contact face)
+distance_scaling_array = np.array([1.0, 1.0, 0.085])
+quad_cost_state = np.diag([1.0, 1.0, 0.085])
 quad_cost_input = np.diag([0.001, 0.001, 5e-6])
 
-# x_init = [0.15, 0.05, 0.]
-# x_goal = [0.40, 0.30, 0.25*np.pi]
+# test on robot
+x_init = planning_scene_data['target']['x']
+x_goal = [0.37, -0.03, np.pi]
 
-# test planning
-x_init = [0.25, 0.05, 0.5*np.pi]
-x_goal = [0.25, 0.45, 0.5*np.pi]
-
+# init contact face: back
 psic_init = np.pi
 
 # underlying functions
@@ -89,100 +88,31 @@ planning_dyn = PushDTHybridSystem(f_lim=force_limit,
                                   nldynamics_time_step=nonlinear_dynamics_time_step)
 
 # --------------------------------------------------
-# General Hybrid R3T Algorithm
-# --------------------------------------------------
-
-# planner = SymbolicSystem_Hybrid_R3T(init_state=np.append(x_init, psic_init),
-#                                     sys=planning_dyn,
-#                                     sampler=sampler,
-#                                     goal_sampling_bias=goal_sampling_bias,
-#                                     mode_consistent_sampling_bias=mode_consistent_sampling_bias,
-#                                     step_size=reachable_set_time_step,
-#                                     contains_goal_function=None,
-#                                     cost_to_go_function=cost_to_go,
-#                                     distance_scaling_array=distance_scaling_array,
-#                                     compute_reachable_set=None,
-#                                     use_true_reachable_set=False,
-#                                     nonlinear_dynamic_step_size=nonlinear_dynamics_time_step,
-#                                     use_convex_hull=True,
-#                                     goal_tolerance=goal_tolerance)
-
-# --------------------------------------------------
 # Contact-Aware Hybrid R3T Algorithm
 # --------------------------------------------------
+planner = SymbolicSystem_Hybrid_R3T_Contact(init_state=np.append(x_init, psic_init),
+                                            sys=planning_dyn,
+                                            sampler=sampler,
+                                            goal_sampling_bias=goal_sampling_bias,
+                                            mode_consistent_sampling_bias=mode_consistent_sampling_bias,
+                                            step_size=reachable_set_time_step,
+                                            planning_scene_pkl=planning_scene_pkl,
+                                            contains_goal_function=None,
+                                            cost_to_go_function=cost_to_go,
+                                            distance_scaling_array=distance_scaling_array,
+                                            compute_reachable_set=None,
+                                            use_true_reachable_set=False,
+                                            nonlinear_dynamic_step_size=nonlinear_dynamics_time_step,
+                                            use_convex_hull=True,
+                                            goal_tolerance=goal_tolerance)
 
-timestamp = time.strftime('%Y_%m_%d_%H_%M',time.localtime(int(round(time.time()*1000))/1000))
-report_path = '/home/yongpeng/research/R3T_shared/data/exp' + '/' + str(timestamp)
-
-try:
-    os.mkdir(report_path)
-except:
-    pass
-
-experiment_report = {'node_num': [],
-                     'planning_time': [],
-                     'path_length': [],
-                     'success': [],
-                     'distance_to_goal': []}
-
-for idx in range(NUM_EXPERIMENTS):
-    ## solve planning
-
-    planner = SymbolicSystem_Hybrid_R3T_Contact(init_state=np.append(x_init, psic_init),
-                                                sys=planning_dyn,
-                                                sampler=sampler,
-                                                goal_sampling_bias=goal_sampling_bias,
-                                                mode_consistent_sampling_bias=mode_consistent_sampling_bias,
-                                                step_size=reachable_set_time_step,
-                                                planning_scene_pkl=planning_scene_pkl,
-                                                contains_goal_function=None,
-                                                cost_to_go_function=cost_to_go,
-                                                distance_scaling_array=distance_scaling_array,
-                                                compute_reachable_set=None,
-                                                use_true_reachable_set=False,
-                                                nonlinear_dynamic_step_size=nonlinear_dynamics_time_step,
-                                                use_convex_hull=True,
-                                                goal_tolerance=goal_tolerance,
-                                                print_flag=False)
-
-    current_planning_start_time = time.time()
-
-    success, goal_node = planner.build_tree_to_goal_state(goal_state=np.array(x_goal),
-                                                        allocated_time=max_planning_time,
-                                                        stop_on_first_reach=False,
-                                                        rewire=False,
-                                                        explore_deterministic_next_state=False,
-                                                        max_nodes_to_add=max_nodes_in_tree,
-                                                        Z_obs_list=state_space_obstacles)
-
-    current_planning_end_time = time.time()
-                                                
-    ## statistics
-    success_flag = success
-    if success_flag:
-        node_num = planner.node_tally
-        planning_time = current_planning_end_time - current_planning_start_time
-        distance_to_goal = np.linalg.norm(np.sqrt(distance_scaling_array) * (goal_node.state[0:3]-x_goal))
-        path_length = planner.get_planned_path_langth()
-    else:
-        node_num = 0
-        planning_time = max_nodes_in_tree
-        distance_to_goal = 0
-        path_length = 0
-
-    print('------ planning round {0} ------ \n node num: {1} \n planning time: {2} \n success: {3} \n distance to goal: {4} \n path length: {5}'\
-            .format(idx, node_num, planning_time, success_flag, distance_to_goal, path_length))
-
-    experiment_report['node_num'].append(node_num)
-    experiment_report['planning_time'].append(planning_time)
-    experiment_report['success'].append(success_flag)
-    experiment_report['path_length'].append(path_length)
-    experiment_report['distance_to_goal'].append(distance_to_goal)    
-
-    planner.get_plan_anim_raw_data(report_path, idx)
-
-pickle.dump(experiment_report, open(os.path.join(report_path, 'report.pkl'), 'wb'))
-
+success, goal_node = planner.build_tree_to_goal_state(goal_state=np.array(x_goal),
+                                                      allocated_time=max_planning_time,
+                                                      stop_on_first_reach=False,
+                                                      rewire=False,
+                                                      explore_deterministic_next_state=False,
+                                                      max_nodes_to_add=max_nodes_in_tree,
+                                                      Z_obs_list=state_space_obstacles)
 
 ## functions for debug
 ## ----------------------------------------------------
@@ -199,15 +129,6 @@ def test_nearest_polytope_search(planner:R3T_Hybrid, query_state):
     centroid_state = centroid_polytope.t
     return candidate_states, centroid_state, candidate_polytopes, [centroid_polytope]
 
-exit(0)
-
-## extract all states
-# state_dict = planner.state_tree.state_id_to_state
-# state_list = []
-# for state_id, state in state_dict.items():
-#     state_list.append(state.tolist())
-# state_array = np.array(state_list)
-
 # plot states
 ## ----------------------------------------------------
 # control flag
@@ -220,8 +141,6 @@ fig = plt.figure()
 ax = fig.add_subplot(131, projection='3d')
 ax_2d = fig.add_subplot(132)
 ax_time = fig.add_subplot(133)
-
-# ax.scatter(state_array[:, 0], state_array[:, 1], state_array[:, 2], c='orange', s=4)
 
 ## extract tree structure
 r3tree = planner.get_r3t_structure()
@@ -303,8 +222,8 @@ print('Report: mode consistency rate {0}!'.format(np.sum(planner.polytope_data['
 import pdb; pdb.set_trace()
 # planner.debugger.save()
 # planner.get_scene_of_planned_path(save_dir='/home/yongpeng/research/R3T_shared/data/debug/planned_path')
-# planner.get_plan_anim_raw_data()
-# planner.get_control_nom_data()
+planner.get_plan_anim_raw_data(data_root=scene_path_name)
+planner.get_control_nom_data(data_root=scene_path_name)
 fig.legend()
 fig_data.legend()
 plt.show()

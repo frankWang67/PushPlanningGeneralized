@@ -27,15 +27,15 @@ search_space_dimensions = np.array([(xmin, xmax), (ymin, ymax), (thetamin, theta
 state_space_obstacles = None
 
 # dynamics configuration
-force_limit = 0.3  # old: 0.3
-pusher_vel_limit = 3.0  # dpsic, old: 3.0
-unilateral_sliding_region_width = 0.005  # old: 0.005
+force_limit = 0.15  # old: 0.3
+pusher_vel_limit = 1.0  # dpsic, old: 3.0
+unilateral_sliding_region_width = 0.01  # old: 0.005
 # slider_geometry = [0.07, 0.12, 0.01]
 
 # test on robot
-slider_geometry = [0.08, 0.15, 0.01]
+slider_geometry = [0.07, 0.12, 0.01]
 
-fric_coeff_slider_pusher = 0.3  # old: 0.3
+fric_coeff_slider_pusher = 0.2  # old: 0.3
 fric_coeff_slider_ground = 0.2
 reachable_set_time_step = 0.05
 nonlinear_dynamics_time_step = 0.01
@@ -55,12 +55,12 @@ quad_cost_input = np.diag([0.001, 0.001, 5e-6])
 # x_goal = [0.40, 0.30, 0.25*np.pi]
 
 # test planning
-# x_init = [0.25, 0.05, 0.5*np.pi]
-# x_goal = [0.25, 0.45, 0.5*np.pi]
+x_init = [0.25, 0.05, 0.5*np.pi]
+x_goal = [0.25, 0.45, 0.5*np.pi]
 
 # test on robot
-x_init = [0.3836, 0.0014, 0.0011945]
-x_goal = [0.7836, 0.0014, 0.0011945]
+# x_init = [0.3836, 0.0014, 0.0011945]
+# x_goal = [0.7836, 0.0014, 0.0011945]
 
 psic_init = np.pi
 
@@ -250,10 +250,19 @@ if success:
 print('Report: mode consistency rate {0}!'.format(np.sum(planner.polytope_data['consistent'])/len(planner.polytope_data['consistent'])))
 
 import pdb; pdb.set_trace()
+
+timestamp = time.strftime('%Y_%m_%d_%H_%M',time.localtime(int(round(time.time()*1000))/1000))
+report_path = '/home/yongpeng/research/R3T_shared/data/debug' + '/' + str(timestamp)
+
+try:
+    os.mkdir(report_path)
+except:
+    pass
+
 # planner.debugger.save()
 # planner.get_scene_of_planned_path(save_dir='/home/yongpeng/research/R3T_shared/data/debug/planned_path')
-# planner.get_plan_anim_raw_data()
-# planner.get_control_nom_data()
+planner.get_plan_anim_raw_data(data_root=report_path)
+planner.get_control_nom_data(data_root=report_path)
 fig.legend()
 fig_data.legend()
 plt.show()

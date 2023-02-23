@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib import collections as mc
 from matplotlib import transforms, animation
 import numpy as np
+import os
 from r3t.symbolic_system.examples.hopper_2D_visualize import *
 import pypolycontain.visualization.visualize_2D as vis2D
 from polytope_symbolic_system.common.utils import *
@@ -536,7 +537,7 @@ class PushPlanningVisualizer:
         axes[2].set_ylabel('psic (rad)')
         axes[2].grid('on')
 
-def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0):
+def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0, xlim=None, ylim=None):
     """
     Plot animation of push planning
     :param visualizer: the PushPlanningVisualizer object
@@ -547,8 +548,8 @@ def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0):
     fig.canvas.manager.set_window_title('Planning Scene')
 
     # set limit
-    ax.set_xlim([0.0, 0.5])
-    ax.set_ylim([0.0, 0.5])
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
 
     # for robot experiment
     # ax.set_xlim([0.3, 0.9])
@@ -593,11 +594,10 @@ def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0):
 if __name__ == '__main__':
     from r3t.polygon.scene import *
     # WARNING: partially initialized
-    basic_info = ContactBasic(miu_list=[0.3 for i in range(3)],
-                              geom_list=[[0.07, 0.12] for i in range(3)],
-                              geom_target=[0.07, 0.12, 0.01],
-                              contact_time=0.05
-                             )
+
+    planned_path_name = '/home/yongpeng/research/R3T_shared/data/debug/real_experiment'
+    planned_file_name = 'planned_path.pkl'
+    planned_data = pickle.load(open(os.path.join(planned_path_name, planned_file_name), 'rb'))
 
     # robot experiment
     # basic_info = ContactBasic(miu_list=[0.3 for i in range(3)],
@@ -606,11 +606,21 @@ if __name__ == '__main__':
     #                           contact_time=0.05
     #                          )
 
-    timestamp = 'smooth_path4'
-    data = pickle.load(open('/home/yongpeng/research/R3T_shared/data/debug/{0}/output.pkl'.format(timestamp), 'rb'))
+    # robot experiment - special scenes
+    scene_path_name = '/home/yongpeng/research/R3T_shared/data/debug/real_experiment'
+    scene_file_name = 'pushaway_circle_obstacle_scene.pkl'
+    scene_data = pickle.load(open(os.path.join(scene_path_name, scene_file_name), 'rb'))
+    basic_info = ContactBasic(miu_list=scene_data['obstacle']['miu'],
+                              geom_list=scene_data['obstacle']['geom'],
+                              geom_target=[scene_data['target']['geom'][0], scene_data['target']['geom'][1], 0.0075],
+                              contact_time=scene_data['contact']['dt']
+                             )
+
+    data = planned_data
     visualizer = PushPlanningVisualizer(basic_info=basic_info,
                                         visual_data=data)
 
     # TEST ANIMATION
-    test_plot_push_planning(visualizer, vel_scale=1.0)
+    # test_plot_push_planning(visualizer, vel_scale=1.0, xlim=[0.26, 0.80], ylim=[-0.09, 0.45])
+    test_plot_push_planning(visualizer, vel_scale=1.0, xlim=[0.23, 0.77], ylim=[-0.20, 0.48])
     
