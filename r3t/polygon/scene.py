@@ -37,6 +37,7 @@ class PlanningScene:
         self.polygons = polygons
         self.states = states
         self.types = types
+        self.goal_poly = None
 
 def load_planning_scene_from_file(scene_pkl):
     """
@@ -81,6 +82,9 @@ def load_planning_scene_from_file(scene_pkl):
                         A_list=raw['obstacle']['A_list'],
                         contact_time=raw['contact']['dt'],
                         geom_target=raw['target']['geom'])
+
+    if 'goal' in raw:
+        scene.goal_poly=raw['goal']
 
     return scene, info
 
@@ -187,7 +191,7 @@ def collision_check_and_contact_reconfig(basic:ContactBasic, scene:PlanningScene
     return True, True, new_scene
 
 def visualize_scene(scene:PlanningScene, fig=None, ax=None, alpha=1.0, \
-                    xlim=[0.0, 0.5], ylim=[0.0, 0.5]):
+                    xlim=[0.0, 0.5], ylim=[0.0, 0.5], movability=None, background=None, scene_index=0):
     """
     Visualize the planning scene
     :param scene: the planning scene
@@ -197,22 +201,39 @@ def visualize_scene(scene:PlanningScene, fig=None, ax=None, alpha=1.0, \
         fig = plt.figure()
         ax = fig.add_subplot(111)
 
+    if background is not None:
+        img = plt.imread(background)
+        ax.imshow(img, extent=xlim+ylim)
+
     cmap = plt.cm.Pastel2
     for idx, polygon in enumerate(scene.polygons):
-        obs_patch = patches.Polygon(np.array(polygon.exterior.coords.xy).T, facecolor=cmap(idx), alpha=alpha, edgecolor='black')
+        if bool(movability[idx]) is False:
+            obs_patch = patches.Polygon(np.array(polygon.exterior.coords.xy).T, facecolor=cmap(idx), alpha=alpha, edgecolor='black', linewidth=3, hatch='x')
+        else:
+            obs_patch = patches.Polygon(np.array(polygon.exterior.coords.xy).T, facecolor=cmap(idx), alpha=alpha, edgecolor='black', linewidth=3)
         ax.add_artist(obs_patch)
 
-    target_patch = patches.Polygon(np.array(scene.target_polygon.exterior.coords.xy).T, facecolor='#1f77b4', alpha=alpha, edgecolor='black')
+    target_patch = patches.Polygon(np.array(scene.target_polygon.exterior.coords.xy).T, facecolor='#1f77b4', alpha=alpha, edgecolor='black', linewidth=3)
     ax.add_patch(target_patch)
+
+    # visualize goal
+    if scene.goal_poly is not None:
+        target_patch = patches.Polygon(np.array(scene.goal_poly.exterior.coords.xy).T, facecolor='#1f77b4', alpha=alpha, edgecolor='black', linewidth=3, linestyle='--')
+        ax.add_patch(target_patch)
 
     plt.xlim(xlim)
     plt.ylim(ylim)
+
+    plt.xticks([])
+    plt.yticks([])
+
+    plt.title('scene{0}'.format(scene_index))
 
     # plt.xlim([0.3, 0.9])
     # plt.ylim([-0.3, 0.3])
 
     plt.gca().set_aspect('equal')
-    plt.grid('on')
+    # plt.grid('on')
 
     return fig, ax    
 
@@ -246,10 +267,12 @@ if __name__ == '__main__':
     geom_default = [0.07, 0.12]  # box
 
     ## scene0
-    # pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_0.pkl'
-    # x_obs = [[0.1, 0.25, 0.6*np.pi],
-    #          [0.25, 0.25, 0.4*np.pi],
-    #          [0.4, 0.25, 0.6*np.pi]]
+    pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_0.pkl'
+    num_obs = 3
+    x_obs = [[0.1, 0.25, 0.6*np.pi],
+             [0.25, 0.25, 0.4*np.pi],
+             [0.4, 0.25, 0.6*np.pi]]
+    movability = [1, 1, 1]
 
     __geom = cs.SX.sym('geom', 2)
     __c = rect_cs(__geom[0], __geom[1])/(__geom[0]*__geom[1])
@@ -274,6 +297,7 @@ if __name__ == '__main__':
     #             [0.06, 0.12]]
     # shape_obs = ['box', 'polygon', 'box', 'box', 'box']
     # type_obs = [1, 0, 1, 1, 1]
+    # movability = type_obs
     # A_list = []
     # for i in range(num_obs):
     #     if shape_obs[i] == 'box':
@@ -296,6 +320,7 @@ if __name__ == '__main__':
     #             [0.06, 0.06]]
     # shape_obs = ['box', 'box', 'box', 'box', 'box']
     # type_obs = [0, 0, 1, 1, 1]
+    # movability = type_obs
     # A_list = []
     # for i in range(num_obs):
     #     if shape_obs[i] == 'box':
@@ -320,6 +345,7 @@ if __name__ == '__main__':
     #             [0.06, 0.06]]
     # shape_obs = ['polygon', 'polygon', 'box', 'box', 'box', 'box']
     # type_obs = [0, 0, 0, 0, 1, 1]
+    # movability = type_obs
     # A_list = []
     # for i in range(num_obs):
     #     if shape_obs[i] == 'box':
@@ -328,19 +354,20 @@ if __name__ == '__main__':
     #         A_list.append(None)
 
     ## scene4
-    pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_4.pkl'
-    num_obs = 3
-    x_obs = [[0.08, 0.32, 0.4*np.pi],
-             [0.38, 0.32, 0.7*np.pi],
-             [0.28, 0.18, 0.2*np.pi]]
-    geom_obs = [[[0, 0.08], [0.04*np.sqrt(3), -0.04], [-0.04*np.sqrt(3), -0.04]], \
-                [[0.03, 0.03*np.sqrt(3)], [0.06, 0], [0.03, -0.03*np.sqrt(3)], [-0.03, -0.03*np.sqrt(3)], [-0.06, 0], [-0.03, 0.03*np.sqrt(3)]], \
-                [[0.04, 0.05], [-0.04, 0.05], [-0.06, -0.05], [0.06, -0.05]]]
-    shape_obs = ['polygon', 'polygon', 'polygon']
-    type_obs = [0, 0, 0]
-    A_list = [None for i in range(num_obs)]
+    # pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_4.pkl'
+    # num_obs = 3
+    # x_obs = [[0.08, 0.32, 0.4*np.pi],
+    #          [0.38, 0.32, 0.7*np.pi],
+    #          [0.28, 0.18, 0.2*np.pi]]
+    # geom_obs = [[[0, 0.08], [0.04*np.sqrt(3), -0.04], [-0.04*np.sqrt(3), -0.04]], \
+    #             [[0.03, 0.03*np.sqrt(3)], [0.06, 0], [0.03, -0.03*np.sqrt(3)], [-0.03, -0.03*np.sqrt(3)], [-0.06, 0], [-0.03, 0.03*np.sqrt(3)]], \
+    #             [[0.04, 0.05], [-0.04, 0.05], [-0.06, -0.05], [0.06, -0.05]]]
+    # shape_obs = ['polygon', 'polygon', 'polygon']
+    # type_obs = [0, 0, 0]
+    # A_list = [None for i in range(num_obs)]
+    # movability = type_obs
 
-    ## real robot experiment
+    # real robot experiment
     # quat_obs = [[-0.01064, -0.014352, -0.0031915, 0.99984],
     #             [0.0013715, -0.0074795, 0.38732, 0.92192],
     #             [-0.012429, -0.00096422, 0.42742, 0.90397]]
@@ -356,14 +383,17 @@ if __name__ == '__main__':
     # pkl_file = '/home/yongpeng/research/R3T_shared/data/debug/real_obstacle_avoidance_robot/planning_scene_robot.pkl'
 
     dt_contact = 0.05
+    x_goal = [0.25, 0.45, 0.5*np.pi]
+    goal_poly = gen_polygon(x_goal, geom_default,'box')
 
-    # # scene_pkl = {'target': {'x': x_init, 'geom': geom_default},
-    # #              'obstacle': {'num': num_obs,
-    # #                           'miu': [miu_default for i in range(num_obs)],
-    # #                           'geom': [geom_default for i in range(num_obs)],
-    # #                           'A_list': [lim_surf_A_obs for i in range(num_obs)],
-    # #                           'x': x_obs},
-    # #              'contact': {'dt': dt_contact}}
+    scene_pkl = {'target': {'x': x_init, 'geom': geom_default},
+                 'obstacle': {'num': num_obs,
+                              'miu': [miu_default for i in range(num_obs)],
+                              'geom': [geom_default for i in range(num_obs)],
+                              'A_list': [lim_surf_A_obs for i in range(num_obs)],
+                              'x': x_obs},
+                 'goal': goal_poly,
+                 'contact': {'dt': dt_contact}}
 
     # scene_pkl = {'target': {'x': x_init, 'geom': [0.08, 0.15]},
     #              'obstacle': {'num': num_obs,
@@ -374,21 +404,23 @@ if __name__ == '__main__':
     #                           'x': x_obs},
     #              'contact': {'dt': dt_contact}}
 
-    scene_pkl = {'target': {'x': x_init, 'geom': geom_default},
-                 'obstacle': {'num': num_obs,
-                              'miu': [miu_default for i in range(num_obs)],
-                              'geom': geom_obs,
-                              'A_list': A_list,
-                              'type': type_obs,
-                              'shape': shape_obs,
-                              'x': x_obs},
-                 'contact': {'dt': dt_contact}}
+    # scene_pkl = {'target': {'x': x_init, 'geom': geom_default},
+    #              'obstacle': {'num': num_obs,
+    #                           'miu': [miu_default for i in range(num_obs)],
+    #                           'geom': geom_obs,
+    #                           'A_list': A_list,
+    #                           'type': type_obs,
+    #                           'shape': shape_obs,
+    #                           'x': x_obs},
+    #              'goal': goal_poly,
+    #              'contact': {'dt': dt_contact}}
 
     pickle.dump(scene_pkl, open(pkl_file, 'wb'))
 
-    pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_4.pkl'
     scene, basic = load_planning_scene_from_file(pkl_file)
-    fig, ax = visualize_scene(scene, alpha=0.25)
+    fig, ax = visualize_scene(scene, alpha=0.75, movability=movability, background='/home/yongpeng/下载/wood.jpg',
+                              scene_index=0)
+    plt.savefig('./scene0_visual.pdf')
     plt.show()
     
     exit(0)

@@ -317,18 +317,19 @@ class R3T_Hybrid_Contact:
         new_node.set_planning_scene(new_planning_scene)
 
         ## FOR DEBUG
-        from r3t.polygon.scene import visualize_scene
-        plt.clf()
-        fig, ax = visualize_scene(new_planning_scene, alpha=0.75, xlim=[0.26, 0.80], ylim=[-0.09, 0.45])
-        plt.savefig('/home/yongpeng/下载/figure/debug/{0}_{1}.png'.format(hash(str(new_state_with_psic[:3])), \
-                                                                         hash(str(nearest_node.state[:3]))))
-        plt.close()
+        # from r3t.polygon.scene import visualize_scene
+        # plt.clf()
+        # fig, ax = visualize_scene(new_planning_scene, alpha=0.75, xlim=[0.26, 0.80], ylim=[-0.09, 0.45])
+        # plt.savefig('/home/yongpeng/下载/figure/debug/{0}_{1}.png'.format(hash(str(new_state_with_psic[:3])), \
+        #                                                                  hash(str(nearest_node.state[:3]))))
+        # plt.close()
 
         # TIME CONSUMING
         # self.debugger.add_node_data(new_node)
 
         error_code = 5
         self.time_cost['extend'].append(default_timer()-T_EXTEND_START)
+        
         return True, new_node, error_code
 
     def build_tree_to_goal_state(self, goal_state, allocated_time = 20, stop_on_first_reach = False, rewire=False, explore_deterministic_next_state = False, max_nodes_to_add = int(1e3),\
