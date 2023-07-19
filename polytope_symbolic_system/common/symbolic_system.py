@@ -550,6 +550,7 @@ class PushDTHybridSystem:
 
         #  -------------------------------------------------------------------
         # auxiliary
+        self.lsurf_A = cs.Function('A', [self.beta], [__A])
         self.RxA = cs.Function('RxA', [self.x, self.beta], [cs.mtimes(__R, __A)])
         # rechable set dynamics (dt = reachable_set_time_step)
         self.f_rcbset = {'front': self.x + self.reachable_set_time_step * cs.vertcat(
@@ -1258,6 +1259,34 @@ class PushDTHybridSystem:
         
         # convert to world frame
         pusher_centroid = state[:2] + np.matmul(rotation_matrix(state[2]), np.array([x, y])+bias)
+        return pusher_centroid
+    
+    def get_contact_location(self, state, contact_face):
+        """
+        Get the pusher contact point (on the slider's boundary)
+        :param state: the state, including psic
+        :param contact_face: the contact face
+        """
+        psic = state[3]
+        xl, yl, rl = self.slider_geom
+        # compute contact location and bias
+        if contact_face == 'front':
+            x = xl/2
+            y = x*np.tan(psic)
+        elif contact_face == 'back':
+            x = -xl/2
+            y = x*np.tan(psic)
+        elif contact_face == 'left':
+            y = yl/2
+            x = y/np.tan(psic)
+        elif contact_face == 'right':
+            y = -yl/2
+            x = y/np.tan(psic)
+        else:
+            raise NotImplementedError('PushDTHybridSystem: the contact face {0} is not supported!'.format(contact_face))
+        
+        # convert to world frame
+        pusher_centroid = state[:2] + np.matmul(rotation_matrix(state[2]), np.array([x, y]))
         return pusher_centroid
 
     def _get_contact_face_from_state(self, state):

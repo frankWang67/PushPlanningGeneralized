@@ -593,11 +593,19 @@ def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0):
 if __name__ == '__main__':
     from r3t.polygon.scene import *
     # WARNING: partially initialized
+    # test_scene_0
     basic_info = ContactBasic(miu_list=[0.3 for i in range(3)],
                               geom_list=[[0.07, 0.12] for i in range(3)],
                               geom_target=[0.07, 0.12, 0.01],
                               contact_time=0.05
                              )
+
+    # test_scene_1
+    # basic_info = ContactBasic(miu_list=[0.3 for i in range(5)],
+    #                           geom_list=[[0.06, 0.12], [0.12, 0.12], [0.06, 0.12], [0.06, 0.12], [0.06, 0.12]],
+    #                           geom_target=[0.07, 0.12, 0.01],
+    #                           contact_time=0.05
+    #                          )
 
     # robot experiment
     # basic_info = ContactBasic(miu_list=[0.3 for i in range(3)],
@@ -606,8 +614,10 @@ if __name__ == '__main__':
     #                           contact_time=0.05
     #                          )
 
-    timestamp = 'smooth_path4'
+    timestamp = 'segmented_path/2023_02_05_11_37'
     data = pickle.load(open('/home/yongpeng/research/R3T_shared/data/debug/{0}/output.pkl'.format(timestamp), 'rb'))
+    # data = pickle.load(open('/home/yongpeng/research/R3T_shared/data/exp/2023_07_07_01_13/0.pkl', 'rb'))
+    import pdb; pdb.set_trace()
     visualizer = PushPlanningVisualizer(basic_info=basic_info,
                                         visual_data=data)
 

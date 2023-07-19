@@ -6,6 +6,7 @@ from shapely.ops import nearest_points, unary_union
 from shapely import affinity, intersects, intersection, distance
 
 from polytope_symbolic_system.common.utils import *
+from r3t.polygon.box2d_helper import _ContactConfig
 from r3t.polygon.utils import *
 from r3t.polygon.solver import LCP
 
@@ -188,6 +189,14 @@ def get_polygon_contact_configuration(target_state, target_poly, state_of_poly, 
             contact_config.append(None)
             continue
 
+        ## --------------------
+        import pdb; pdb.set_trace()
+        _ContactConfig(moved_states=target_state, \
+                       moved_polygon=target_poly, \
+                       fixed_state=state, \
+                       fixed_polygon=poly)
+        ## --------------------
+
         # in collision
         config = {'basic': {},
                   'target': {},
@@ -244,6 +253,110 @@ def get_polygon_contact_configuration(target_state, target_poly, state_of_poly, 
     
     return contact_config
 
+def get_polygon_contact_configuration_v2(target_state, target_poly, state_of_poly, list_of_poly, 
+                                         p_pusher, v_pusher, fric_coeff, fric_coeff_pusher, limit_surface):
+    """
+    Get contact location, normal, tangent between polygons
+    :param target_state: the motions of target_poly, including current state,
+                         each line represents one configuration
+    :param target_poly: the specific polygon
+    :param state_of_poly: state of candidate polygons
+    :param list_of_poly: list of candiate polygons
+    :param limit_surface: list of limit surface matrix A
+    :return: contact configuration
+    ---
+    v2 uses box2d for collision detection
+    """
+    list_of_contact_info = []
+
+    if not isinstance(target_state, np.ndarray):
+        target_state = np.array(target_state)
+    target_state = target_state.reshape(-1, 3)
+    
+    idx_poly = 0
+    for poly, state in zip(list_of_poly, state_of_poly):
+        idx_poly += 1
+        # not in collision
+        if poly is None or state is None:
+            continue
+
+        ## --------------------
+        contact_info = _ContactConfig(moved_states=target_state, \
+                                      moved_polygon=target_poly, \
+                                      fixed_state=state, \
+                                      fixed_polygon=poly)
+        contact_info.id1 = 0
+        contact_info.id2 = idx_poly
+        list_of_contact_info.append(contact_info)
+        ## --------------------
+
+    ## --------------------
+    nc = len(list_of_contact_info) + 1
+    nb = len(list_of_poly) + 1
+    block_rotation_matrix = cvt_state_list_to_totation_matrix_list([target_state[0].tolist()]+state_of_poly)
+    block_twist_proj_matrix = np.zeros((nb, 3, 3*nc))
+    fSelMat = np.array([[1, 0, 0], 
+                        [0, 1, -1]])
+    
+    M, N = np.zeros((3*nc+nc, 3*nc+nc)), np.zeros((4*nc, 1))
+
+    # project contact force to block velocities
+    for cidx, ci in enumerate(list_of_contact_info):
+        Jc1, Jc2 = get_contact_jacobian(ci.c1), get_contact_jacobian(ci.c2)  # 2x3
+        Rab1, Rab2 = np.c_[ci.a1, ci.b1], np.c_[ci.a2, ci.b2]                # 2x2
+        A1, A2 = limit_surface[ci.id1], limit_surface[ci.id2]                # 3x3
+        if ci.valid_index == 1:
+            R1 = np.matmul(block_rotation_matrix[ci.id1].T[:2, :2], Rab1)
+            R2 = np.matmul(block_rotation_matrix[ci.id2].T[:2, :2], Rab1)
+        else:
+            R1 = np.matmul(block_rotation_matrix[ci.id1].T[:2, :2], Rab2)
+            R2 = np.matmul(block_rotation_matrix[ci.id2].T[:2, :2], Rab2)
+        assert ci.id1 == 0
+        block_twist_proj_matrix[0, :, 3*(cidx+1):3*(cidx+2)] = matrix_mult([A1, Jc1.T, R1, fSelMat])
+        block_twist_proj_matrix[ci.id2, :, 3*(cidx+1):3*(cidx+2)] = matrix_mult([A2, Jc2.T, R2, fSelMat])
+
+    # project pusher force to slider velocity
+    try:
+        a_, b_ = get_normal_and_tangent_on_polygon(p_pusher, target_poly)
+    except:
+        import pdb; pdb.set_trace()
+
+    p_pusher_rel = np.matmul(block_rotation_matrix[0].T[:2, :2], (p_pusher-target_state[0, 0:2]))
+    Jc = get_contact_jacobian(p_pusher_rel)
+    A = limit_surface[0]
+    Rab = np.c_[a_, b_]
+    R = np.matmul(block_rotation_matrix[0].T[:2, :2], Rab)
+    block_twist_proj_matrix[0, :, 0:3] = matrix_mult([A, Jc.T, R, fSelMat])
+
+    # consider inter-object contacts
+    for cidx, ci in enumerate(list_of_contact_info):
+        Jc1, Jc2 = get_contact_jacobian(ci.c1), get_contact_jacobian(ci.c2)
+        if ci.valid_index == 1:
+            diff_twist_proj_matrix = matrix_mult([block_rotation_matrix[0][:2, :2], Jc1, block_twist_proj_matrix[0]]) - \
+                                        matrix_mult([block_rotation_matrix[ci.id2][:2, :2], Jc2, block_twist_proj_matrix[ci.id2]])   # 3x3nc
+            M[3*(cidx+1):3*(cidx+2), :3*nc] = np.matmul(np.vstack((ci.a1, ci.b1, -ci.b1)), diff_twist_proj_matrix)
+        else:
+            diff_twist_proj_matrix = matrix_mult([block_rotation_matrix[ci.id2][:2, :2], Jc2, block_twist_proj_matrix[ci.id2]]) - \
+                                        matrix_mult([block_rotation_matrix[0][:2, :2], Jc1, block_twist_proj_matrix[0]])        # 3x3nc
+            M[3*(cidx+1):3*(cidx+2), :3*nc] = np.matmul(np.vstack((ci.a2, ci.b2, -ci.b2)), diff_twist_proj_matrix)
+        M[3*(cidx+1)+1:3*(cidx+2), 3*nc+cidx+1] = 1
+        M[3*nc+cidx+1, 3*(cidx+1):3*(cidx+2)] = [fric_coeff[ci.id2-1], -1, -1]
+    
+    # consider pusher-slider contact
+    Jc = get_contact_jacobian(p_pusher_rel)
+    diff_twist_proj_matrix = matrix_mult([block_rotation_matrix[0][:2, :2], Jc, block_twist_proj_matrix[0]])
+    M[0:3, :3*nc] = np.matmul(np.vstack((a_, b_, -b_)), diff_twist_proj_matrix)
+    M[1:3, 3*nc] = 1
+    M[3*nc, 0:3] = [fric_coeff_pusher, -1, -1]
+
+    N[0:3, 0] = np.matmul(np.vstack((a_, b_, -b_)), -v_pusher)
+    ## --------------------
+
+    for bidx in range(nb):
+        block_twist_proj_matrix[bidx] = np.matmul(block_rotation_matrix[bidx], block_twist_proj_matrix[bidx])
+    
+    return M, N, block_twist_proj_matrix
+
 def update_contact_configuration(target_state, contact_config):
     """
     Update the contact configuration between polygons
@@ -254,7 +367,6 @@ def update_contact_configuration(target_state, contact_config):
     """
     new_contact_config = []
     for config in contact_config:
-        # import pdb; pdb.set_trace()
         # empty config --> not in contact
         if config is None:
             new_contact_config.append(None)
@@ -403,6 +515,28 @@ def update_contact_configuration(target_state, contact_config):
         new_contact_config.append(config)
 
     return new_contact_config
+
+def solve_contact_force(M, q):
+    try:
+        res = {'x': LCP(M, q)}
+    except:
+        import pdb; pdb.set_trace()
+
+    return res['x']
+
+def move_blocks_one_step(state, velocity, dt):
+    return state + velocity * dt
+
+def update_state_list(state_list, velocity, dt):
+    ns = state_list.shape[0] - 1
+    d_xytheta = np.expand_dims(velocity, axis=0) * (dt / ns)
+    d_xytheta = d_xytheta.repeat(ns, axis=0)
+    d_xytheta = np.cumsum(d_xytheta, axis=0)
+
+    state_list_new = np.expand_dims(state_list[0], axis=0).repeat(ns+1, axis=0)
+    state_list_new[1:, :3] += d_xytheta
+
+    return state_list_new
 
 def handle_possible_penetration(contact_config):
     """

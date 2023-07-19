@@ -183,3 +183,15 @@ def get_rotation_before_penetration(m_beam, s_beam, edge_on_which):
     # get rotation angle
     return angle_diff(get_vector_azimuth_angle(beam_pair1[1]),get_vector_azimuth_angle(beam_pair1[0])), \
            angle_diff(get_vector_azimuth_angle(beam_pair2[1]),get_vector_azimuth_angle(beam_pair2[0]))
+
+def cvt_state_list_to_totation_matrix_list(states, dim=3):
+    matrix = np.expand_dims(np.eye(dim), axis=0).repeat(len(states), axis=0)
+    for idx, pose in enumerate(states):
+        if pose is None:
+            continue
+        matrix[idx, :2, :2] = rotation_matrix(pose[2])
+
+    return matrix
+
+def get_LCP_matrices(contact, ):
+    pass

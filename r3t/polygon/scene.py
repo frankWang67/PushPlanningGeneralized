@@ -9,6 +9,8 @@ from polytope_symbolic_system.common.intfunc import *
 from polytope_symbolic_system.common.utils import *
 from r3t.polygon.utils import *
 from r3t.polygon.process import *
+from r3t.polygon.plot_utils import *
+from r3t.polygon.collision_interface import collision_reaction
 
 
 class ContactBasic:
@@ -16,12 +18,13 @@ class ContactBasic:
     Underlying class of R3T, including basic information about object-object contact,
     including friction coefficient, geometry ...
     """
-    def __init__(self, miu_list=None, geom_list=None, A_list=None, geom_target=None, \
+    def __init__(self, miu_list=None, geom_list=None, A_list=None, geom_target=None, A_target=None, \
                     miu_pusher_slider=0.3, contact_time=0.) -> None:
         self.miu_list = miu_list  # friction coeff between all objects and target
         self.geom_list = geom_list  # geometry of all objects
         self.A_list = A_list  # limit surface of all obstacles
         self.geom_target = geom_target  # geometry of the target object
+        self.A_target = A_target  # limit surface of the target object
         self.miu_pusher_slider = miu_pusher_slider  # the friction coefficient between pusher and slider
         self.contact_time = contact_time
         # FIXME: more to be added
@@ -136,6 +139,7 @@ def collision_check_and_contact_reconfig(basic:ContactBasic, scene:PlanningScene
         new_scene.in_contact = True
     
     # contact configuration
+    import pdb; pdb.set_trace()
     contact_config = get_polygon_contact_configuration(target_state=target_state,
                                                        target_poly=scene.target_polygon,
                                                        state_of_poly=states_in_contact,
@@ -189,6 +193,113 @@ def collision_check_and_contact_reconfig(basic:ContactBasic, scene:PlanningScene
     
     # in contact, can extend
     return True, True, new_scene
+
+def collision_check_and_contact_reconfig_v2(basic:ContactBasic, scene:PlanningScene, state_list, 
+                                            p_pusher, v_pusher):
+    """
+    Collision check and contact reconfiguration
+    :param basic: the basic information in contact analysis
+    :param scene: the current planning scene
+    :param state_list: the list of target polygon states in the following steps
+    :return: flag - in contact or not in the following steps
+    :return: flag - can extend or not
+                    if obstacles in contact collide with other obstacles, extension failed
+    :return: new scene - new PlanningScene object
+    """
+    # copy new planning scene
+    new_scene = copy.deepcopy(scene)
+    # create the target object
+    if not isinstance(state_list, np.ndarray):
+        target_state = np.array(state_list)
+    else:
+        target_state = state_list
+    target_state = np.atleast_2d(target_state)[:, :3]
+
+    target_polygon_next = gen_polygon(target_state[-1, :], basic.geom_target, 'box')
+    new_scene.target_polygon = target_polygon_next
+    
+    # first step velocity
+    target_velocity = (target_state[1, :] - target_state[0, :]) / (basic.contact_time / (target_state.shape[0]-1))
+    
+    # contact check
+    in_contact_flag, polygons_in_contact, states_in_contact = \
+        get_polygon_in_collision(target_state=target_state,
+                                 target_poly=scene.target_polygon,
+                                 state_of_poly=scene.states,
+                                 list_of_poly=scene.polygons)
+
+    # check if collision with static obstacles
+    if polygons_in_contact is not None:
+        for idx, polygon in enumerate(polygons_in_contact):
+            if polygon is not None and new_scene.types[idx] == 0:
+                new_scene.in_contact = True
+                return True, False, None, None, new_scene
+    
+    if not in_contact_flag:
+        # no contact, can extend
+        new_scene.in_contact = False
+        return False, True, target_state[-1][:3], state_list, new_scene
+    else:
+        new_scene.in_contact = True
+    
+    # contact configuration
+    # import pdb; pdb.set_trace()
+    M, N, P = get_polygon_contact_configuration_v2(target_state=target_state,
+                                                   target_poly=scene.target_polygon,
+                                                   state_of_poly=states_in_contact,
+                                                   list_of_poly=polygons_in_contact,
+                                                   p_pusher=p_pusher, 
+                                                   v_pusher=v_pusher,
+                                                   fric_coeff_pusher=basic.miu_pusher_slider,
+                                                   fric_coeff=basic.miu_list,
+                                                   limit_surface=[basic.A_target]+basic.A_list)
+    nc = int(M.shape[0] / 4)
+    contact_force = solve_contact_force(M=M, q=N.squeeze()).flatten()[:3*nc]
+    block_v = np.matmul(P, contact_force)
+    block_current_state = np.concatenate((target_state[0].reshape(-1, 3), np.array(scene.states).reshape(-1, 3)), axis=0)
+    block_next_state = move_blocks_one_step(block_current_state, block_v, dt=basic.contact_time)
+
+    state_list_updated = update_state_list(state_list=np.array(state_list), velocity=block_v[0], dt=basic.contact_time)
+
+    # import pdb; pdb.set_trace()
+    block_geoms = [basic.geom_target]+basic.geom_list
+    block_next_state_updated = collision_reaction(states=block_next_state, 
+                                                  geoms=block_geoms, 
+                                                  fixed_idx=0)
+    # plot_polygons_consecutive_timesteps(states1=block_current_state, states2=block_next_state_updated, 
+    #                                     orig_state_list=state_list, 
+    #                                     geoms=block_geoms)
+
+    for idx in range(block_next_state_updated.shape[0]):
+        if idx == 0:
+             continue
+        
+        if len(block_geoms[idx]) <= 2:
+            obstacle_poly = gen_polygon(block_next_state_updated[idx], block_geoms[idx], type="box")
+        else:
+            obstacle_poly = gen_polygon(block_next_state_updated[idx], block_geoms[idx], type="polygon")
+
+        new_scene.polygons[idx-1] = obstacle_poly
+        new_scene.states[idx-1] = block_next_state_updated[idx]
+
+    target_polygon_updated = gen_polygon(block_next_state_updated[0], block_geoms[0], type="box")
+    new_scene.target_polygon = target_polygon_updated
+
+    # further collision check
+    for idx, polygon in enumerate(new_scene.polygons):
+        other_polygons = copy.deepcopy(new_scene.polygons)
+        other_polygons.pop(idx)
+        # collide with other polygons
+        if not MultiPolygon(other_polygons).is_valid:
+            # in contact, cannot extend
+            return True, False, None, None, new_scene
+        # collide with other polygons
+        if intersects(polygon, MultiPolygon(other_polygons)):
+            # in contact, cannot extend
+            return True, False, None, None, new_scene
+    
+    # in contact, can extend
+    return True, True, block_next_state_updated[0], state_list_updated, new_scene
 
 def visualize_scene(scene:PlanningScene, fig=None, ax=None, alpha=1.0, \
                     xlim=[0.0, 0.5], ylim=[0.0, 0.5], movability=None, background=None, scene_index=0):

@@ -170,6 +170,7 @@ class R3T_Hybrid_Contact:
         scene, basic_info = load_planning_scene_from_file(planning_scene_pkl)
         self.root_node.set_planning_scene(scene)
         # self.debugger.add_node_data(self.root_node)
+        basic_info.A_target = self.sys.lsurf_A(basic_info.geom_target+[0.01]).toarray()
         self.contact_basic = basic_info
 
         ## compute_reachable_set
@@ -249,10 +250,9 @@ class R3T_Hybrid_Contact:
 
     def extend(self, new_state, nearest_node, closest_polytope, Z_obs_list=None):
         """
-
         :param new_state: the new state, excluding psic
         :param nearest_node: the nearest node, including parent state
-        :param closest_polytope: the closest polytope
+        :param closest_polytope: the closest polytope.sys
         :param Z_obs_list: the MultiPolygon object for obstacles
         :return: is_extended, new_node
         """
@@ -270,6 +270,7 @@ class R3T_Hybrid_Contact:
             nearest_node.reachable_set.plan_path_in_set_with_hybrid_dynamics(new_state, closest_polytope, Z_obs_list)
         # FIXME: Support for partial extensions
 
+
         # hash collision check
         if hash(str(new_state_with_psic[:-1])) in self.state_to_node_map:
             error_code = 1
@@ -282,17 +283,50 @@ class R3T_Hybrid_Contact:
 
         # collision check and contact reconfiguration (planning with contact)
         try:
-            in_contact_flag, can_extend_flag, new_planning_scene = \
-                collision_check_and_contact_reconfig(basic=self.contact_basic,
-                                                    scene=nearest_node.planning_scene,
-                                                    state_list=path)
+            # in_contact_flag, can_extend_flag, new_planning_scene = \
+            #     collision_check_and_contact_reconfig(basic=self.contact_basic,
+            #                                         scene=nearest_node.planning_scene,
+            #                                         state_list=path)
+            # new_state_updated = new_state.copy()
+
+            # # get pushed point and velocity
+            # # ----------------------------------------
+            pusher_contact_p0 = self.sys.get_contact_location(path[0], contact_face=closest_polytope.mode_string[0])
+            pusher_contact_pf = self.sys.get_contact_location(path[-1], contact_face=closest_polytope.mode_string[0])
+            pusher_velocity = (pusher_contact_pf - pusher_contact_p0) / self.sys.reachable_set_time_step
+            # # ----------------------------------------
+            in_contact_flag, can_extend_flag, new_state_updated, state_list_updated, new_planning_scene = \
+                collision_check_and_contact_reconfig_v2(basic=self.contact_basic,
+                                                        scene=nearest_node.planning_scene,
+                                                        state_list=path,
+                                                        p_pusher=pusher_contact_p0,
+                                                        v_pusher=pusher_velocity)
+            if in_contact_flag and can_extend_flag:
+                path = state_list_updated.copy()
+            
+        ## debug the last step
         except Exception as e:
             print('R3T_Hybrid: caught exeption %s' % e)
             import pdb; pdb.set_trace()
-            in_contact_flag, can_extend_flag, new_planning_scene = \
-                collision_check_and_contact_reconfig(basic=self.contact_basic,
-                                                    scene=nearest_node.planning_scene,
-                                                    state_list=path)
+
+            # in_contact_flag, can_extend_flag, new_planning_scene = \
+            #     collision_check_and_contact_reconfig(basic=self.contact_basic,
+            #                                         scene=nearest_node.planning_scene,
+            #                                         state_list=path)
+
+            # # get pushed point and velocity
+            # # ----------------------------------------
+            pusher_contact_p0 = self.sys.get_contact_location(path[0], contact_face=closest_polytope.mode_string[0])
+            pusher_contact_pf = self.sys.get_contact_location(path[-1], contact_face=closest_polytope.mode_string[0])
+            pusher_velocity = (pusher_contact_pf - pusher_contact_p0) / self.sys.reachable_set_time_step
+            # # ----------------------------------------
+            in_contact_flag, can_extend_flag, new_state_updated, new_planning_scene = \
+                collision_check_and_contact_reconfig_v2(basic=self.contact_basic,
+                                                        scene=nearest_node.planning_scene,
+                                                        state_list=path,
+                                                        p_pusher=pusher_contact_p0,
+                                                        v_pusher=pusher_velocity)
+            
             pass
 
         # indirect collision, uncontrollable, discard without extension
@@ -309,7 +343,7 @@ class R3T_Hybrid_Contact:
 
         # can connect
         new_node = self.create_child_node(parent_node=nearest_node,
-                                          child_state=new_state_with_psic,
+                                          child_state=np.append(new_state_updated, new_state_with_psic[-1]),
                                           input_from_parent=applied_u,
                                           mode_string_from_parent=closest_polytope.mode_string,
                                           cost_from_parent=cost_to_go,

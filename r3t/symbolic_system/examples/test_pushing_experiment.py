@@ -18,12 +18,13 @@ from r3t.symbolic_system.symbolic_system_r3t import *
 # scene configuration
 # --------------------------------------------------
 # planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_0.pkl'
-planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_1.pkl'
+# planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_1.pkl'
 # planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_2.pkl'
 # planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_3.pkl'
-# planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_4.pkl'
+planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_4.pkl'
 
 NUM_EXPERIMENTS = 10
+SAVE_FILE_FLAG = True
 # --------------------------------------------------
 
 xmin, xmax, ymin, ymax, thetamin, thetamax = 0.0, 0.5, 0.0, 0.5, -np.pi, np.pi
@@ -112,7 +113,7 @@ planning_dyn = PushDTHybridSystem(f_lim=force_limit,
 # --------------------------------------------------
 
 timestamp = time.strftime('%Y_%m_%d_%H_%M',time.localtime(int(round(time.time()*1000))/1000))
-report_path = '/home/yongpeng/research/R3T_shared/data/exp' + '/' + str(timestamp)
+report_path = '/home/yongpeng/research/R3T_shared/data/exp/new_model/scene4' + '/' + str(timestamp)
 
 try:
     os.mkdir(report_path)
@@ -181,7 +182,11 @@ for idx in range(NUM_EXPERIMENTS):
 
     planner.get_plan_anim_raw_data(report_path, idx)
 
-pickle.dump(experiment_report, open(os.path.join(report_path, 'report.pkl'), 'wb'))
+## save experiment result
+## ---------------------------------------------------
+if SAVE_FILE_FLAG:
+    pickle.dump(experiment_report, open(os.path.join(report_path, 'report.pkl'), 'wb'))
+## ----------------------------------------------------
 
 
 ## functions for debug
