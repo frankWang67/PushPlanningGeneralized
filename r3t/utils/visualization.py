@@ -1,3 +1,6 @@
+import os
+r3t_root_dir = os.environ.get("R3T_HOME")
+
 from collections import deque
 import matplotlib.pyplot as plt
 from matplotlib import collections as mc
@@ -853,12 +856,7 @@ if __name__ == '__main__':
     #                           contact_time=0.05
     #                          )
 
-    # timestamp = 'segmented_path/2023_02_05_11_37'
-    # data = pickle.load(open('/home/yongpeng/research/R3T_shared/data/debug/{0}/output.pkl'.format(timestamp), 'rb'))
-    # data = pickle.load(open('/home/yongpeng/research/R3T_shared/data/exp/2023_07_07_01_13/0.pkl', 'rb'))
-
-    # data = pickle.load(open('/home/yongpeng/research/R3T_shared/data/exp/new_model/scene1/2023_07_07_15_27_(2)/3.pkl', 'rb'))
-    data = pickle.load(open('/home/yongpeng/research/rrt-algorithms/data/exp/search_space_0.0_0.5_0.0_0.5/scene_1_10_round_#1/4.pkl', 'rb'))
+    data = pickle.load(open(os.path.join(r3t_root_dir, 'data/exp/search_space_0.0_0.5_0.0_0.5/scene_1_10_round_#1/4.pkl'), 'rb'))
     
     visualizer = PushPlanningVisualizer(basic_info=basic_info,
                                         visual_data=data,

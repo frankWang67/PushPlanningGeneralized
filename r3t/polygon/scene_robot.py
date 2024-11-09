@@ -1,9 +1,10 @@
 import os
+r3t_root_dir = os.environ.get("R3T_HOME")
 from r3t.polygon.scene import *
 
 ## obstacle avoidance scene
 #  -------------------------------------------------
-# scene_path_name = '/home/yongpeng/research/R3T_shared/data/debug/real_experiment'
+# scene_path_name = os.path.join(r3t_root_dir, "data", "debug/real_experiment")
 # scene_file_name = 'obstacle_avoidance_scene.pkl'
 # scene_pkl = os.path.join(scene_path_name, scene_file_name)
 # scene_data = pickle.load(open(scene_pkl, 'rb'))
@@ -17,7 +18,7 @@ from r3t.polygon.scene import *
 
 ## obstacle pushaway scene
 #  -------------------------------------------------
-# scene_path_name = '/home/yongpeng/research/R3T_shared/data/debug/real_experiment'
+# scene_path_name = os.path.join(r3t_root_dir, "data", "debug/real_experiment")
 # scene_file_name = 'obstacle_pushaway_scene.pkl'
 # scene_pkl = os.path.join(scene_path_name, scene_file_name)
 # scene_data = pickle.load(open(scene_pkl, 'rb'))
@@ -31,7 +32,7 @@ from r3t.polygon.scene import *
 
 ## pushaway circle obstacle scene
 #  -------------------------------------------------
-scene_path_name = '/home/yongpeng/research/R3T_shared/data/debug/real_experiment'
+scene_path_name = os.path.join(r3t_root_dir, "data", "debug/real_experiment")
 scene_file_name = 'pushaway_circle_obstacle_scene.pkl'
 scene_pkl = os.path.join(scene_path_name, scene_file_name)
 scene_data = pickle.load(open(scene_pkl, 'rb'))

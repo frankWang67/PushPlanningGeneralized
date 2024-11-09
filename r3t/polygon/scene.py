@@ -1,3 +1,6 @@
+import os
+r3t_root_dir = os.environ.get("R3T_HOME")
+
 import casadi as cs
 import copy
 from matplotlib import pyplot as plt
@@ -382,7 +385,7 @@ if __name__ == '__main__':
     geom_default = [0.07, 0.12]  # box
 
     ## scene0
-    pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_0.pkl'
+    pkl_file = os.path.join(r3t_root_dir, 'data', 'test_scene_0.pkl')
     num_obs = 3
     x_obs = [[0.1, 0.25, 0.6*np.pi],
              [0.25, 0.25, 0.4*np.pi],
@@ -398,7 +401,7 @@ if __name__ == '__main__':
     lim_surf_A_obs = A(geom_default).toarray()
 
     ## scene1
-    # pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_1.pkl'
+    # pkl_file = os.path.join(r3t_root_dir, 'data', 'test_scene_1.pkl')
     # num_obs = 5
     # x_obs = [[0.12, 0.20, 0.75*np.pi],
     #          [0.25, 0.30, 0.0*np.pi],
@@ -421,7 +424,7 @@ if __name__ == '__main__':
     #         A_list.append(None)
 
     ## scene2
-    # pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_2.pkl'
+    # pkl_file = os.path.join(r3t_root_dir, 'data', 'test_scene_2.pkl')
     # num_obs = 5
     # x_obs = [[0.1, 0.05, 0.0*np.pi],
     #          [0.4, 0.05, 0.0*np.pi],
@@ -444,7 +447,7 @@ if __name__ == '__main__':
     #         A_list.append(None)
 
     ## scene3
-    # pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_3.pkl'
+    # pkl_file = os.path.join(r3t_root_dir, 'data', 'test_scene_3.pkl')
     # num_obs = 6
     # x_obs = [[0.10, 0.25, 0.3*np.pi],
     #          [0.24, 0.25, -0.2*np.pi],
@@ -469,7 +472,7 @@ if __name__ == '__main__':
     #         A_list.append(None)
 
     ## scene4
-    # pkl_file = '/home/yongpeng/research/R3T_shared/data/test_scene_4.pkl'
+    # pkl_file = os.path.join(r3t_root_dir, 'data', 'test_scene_4.pkl')
     # num_obs = 3
     # x_obs = [[0.08, 0.32, 0.4*np.pi],
     #          [0.38, 0.32, 0.7*np.pi],
@@ -495,7 +498,7 @@ if __name__ == '__main__':
 
     # create planning scene and save to file
     # --------------------------------------------------
-    # pkl_file = '/home/yongpeng/research/R3T_shared/data/debug/real_obstacle_avoidance_robot/planning_scene_robot.pkl'
+    # pkl_file = os.path.join(r3t_root_dir, 'data', 'debug/real_obstacle_avoidance_robot/planning_scene_robot.pkl')
 
     dt_contact = 0.05
     x_goal = [0.25, 0.45, 0.5*np.pi]
@@ -543,9 +546,8 @@ if __name__ == '__main__':
     ## -------------------------------------------------
     ## TEST UPDATE CONTACT CONFIGURATION
     ## -------------------------------------------------
-
-    contact_config = pickle.load(open('/home/yongpeng/research/R3T_shared/data/debug/contact_config.pkl', 'rb'))
-    target_state = np.load('/home/yongpeng/research/R3T_shared/data/debug/target_state.npy')
+    contact_config = pickle.load(open(os.path.join(r3t_root_dir, 'data', 'debug/contact_config.pkl'), 'rb'))
+    target_state = np.load(os.path.join(r3t_root_dir, 'data', 'debug/target_state.npy'))
     contact_config[2]['obstacle']['x'] = [0.4, 0.25, 0.6*np.pi]
     contact_config[2]['obstacle']['polygon'] = gen_polygon(contact_config[2]['obstacle']['x'], [0.07, 0.12], 'box')
     contact_config[2]['obstacle']['abs_p']

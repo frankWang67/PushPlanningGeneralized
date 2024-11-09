@@ -1,3 +1,6 @@
+import os
+r3t_root_dir = os.environ.get("R3T_HOME")
+
 import pydrake
 from r3t.common.r3t import *
 from r3t.common.r3t_contact import *
@@ -1169,7 +1172,7 @@ class SymbolicSystem_Hybrid_R3T_Contact(R3T_Hybrid_Contact):
             U_slider_seg.clear()
             contact_face_seg.clear()
 
-        # data_root = '/home/yongpeng/research/R3T_shared/data/debug'
+        # data_root = os.path.join(data_root, 'data', 'debug')
         # timestamp = self.debugger.timestamp
         # try:
         #     os.mkdir(os.path.join(data_root, timestamp))

@@ -6,6 +6,9 @@
 # Ignore warnings
 # --------------------------------------------------
 
+import os
+r3t_root_dir = os.environ.get("R3T_HOME")
+
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -17,11 +20,7 @@ from r3t.symbolic_system.symbolic_system_r3t import *
 
 # scene configuration
 # --------------------------------------------------
-# planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_0.pkl'
-# planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_1.pkl'
-# planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_2.pkl'
-# planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_3.pkl'
-planning_scene_pkl = '/home/yongpeng/research/R3T_shared/data/test_scene_4.pkl'
+planning_scene_pkl = os.path.join(r3t_root_dir, "data", "test_scene_4.pkl")
 
 NUM_EXPERIMENTS = 10
 SAVE_FILE_FLAG = True
@@ -113,7 +112,7 @@ planning_dyn = PushDTHybridSystem(f_lim=force_limit,
 # --------------------------------------------------
 
 timestamp = time.strftime('%Y_%m_%d_%H_%M',time.localtime(int(round(time.time()*1000))/1000))
-report_path = '/home/yongpeng/research/R3T_shared/data/exp/new_model/scene4' + '/' + str(timestamp)
+report_path = os.path.join(r3t_root_dir, 'data', 'exp', 'new_model', 'scene4', str(timestamp))
 
 try:
     os.mkdir(report_path)
@@ -307,7 +306,7 @@ print('Report: mode consistency rate {0}!'.format(np.sum(planner.polytope_data['
 
 import pdb; pdb.set_trace()
 # planner.debugger.save()
-# planner.get_scene_of_planned_path(save_dir='/home/yongpeng/research/R3T_shared/data/debug/planned_path')
+# planner.get_scene_of_planned_path(save_dir=os.path.join(r3t_root_dir, 'data', 'debug', 'planned_path'))
 # planner.get_plan_anim_raw_data()
 # planner.get_control_nom_data()
 fig.legend()

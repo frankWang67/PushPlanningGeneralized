@@ -1,3 +1,6 @@
+import os
+r3t_root_dir = os.environ.get("R3T_HOME")
+
 import copy
 from collections import namedtuple
 import json
@@ -11,8 +14,8 @@ from r3t.polygon.scene import visualize_scene
 Scene = namedtuple('Scene', ['url'])
 
 class JSONDebugger:
-    def __init__(self, scene_root='/home/yongpeng/research/R3T_shared/data/scene', \
-                    json_root='/home/yongpeng/research/R3T_shared/data/json') -> None:
+    def __init__(self, scene_root=os.path.join(r3t_root_dir, 'data', 'scene'), \
+                    json_root=os.path.join(r3t_root_dir, 'data', 'json')) -> None:
         self.data = None
         self.path = None
         self.scene_data = Tree()

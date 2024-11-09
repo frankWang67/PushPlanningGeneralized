@@ -6,6 +6,9 @@
 # Ignore warnings
 # --------------------------------------------------
 
+import os
+r3t_root_dir = os.environ.get("R3T_HOME")
+
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -15,7 +18,7 @@ from polytope_symbolic_system.common.symbolic_system import *
 from r3t.symbolic_system.symbolic_system_r3t import *
 
 # test on robot
-scene_path_name = '/home/yongpeng/research/R3T_shared/data/debug/real_experiment'
+scene_path_name = os.path.join(r3t_root_dir, "data", "debug/real_experiment")
 scene_file_name = 'obstacle_avoidance_scene.pkl'
 planning_scene_pkl = os.path.join(scene_path_name, scene_file_name)
 planning_scene_data = pickle.load(open(planning_scene_pkl, 'rb'))
@@ -223,7 +226,7 @@ print("The planning results will be stored in {}! \
         Please check as planned_path.pkl and path_seg.pkl will be override".format(scene_path_name))
 input("Press Enter to continue...")
 # planner.debugger.save()
-# planner.get_scene_of_planned_path(save_dir='/home/yongpeng/research/R3T_shared/data/debug/planned_path')
+# planner.get_scene_of_planned_path(save_dir=os.path.join(r3t_root_dir, 'data', 'debug', 'planned_path'))
 planner.get_plan_anim_raw_data(data_root=scene_path_name)
 planner.get_control_nom_data(data_root=scene_path_name)
 fig.legend()

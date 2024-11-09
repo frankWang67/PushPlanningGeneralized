@@ -1,3 +1,6 @@
+import os
+r3t_root_dir = os.environ.get("R3T_HOME")
+
 from collections import deque
 import matplotlib.pyplot as plt
 from matplotlib import collections as mc
@@ -594,7 +597,7 @@ if __name__ == '__main__':
     from r3t.polygon.scene import *
     # WARNING: partially initialized
 
-    planned_path_name = '/home/yongpeng/research/R3T_shared/data/debug/real_experiment/circular_pushaway_saved_path/saved_path0'
+    planned_path_name = os.path.join(r3t_root_dir, "data", "debug/real_experiment/circular_pushaway_saved_path/saved_path0")
     planned_file_name = 'planned_path.pkl'
     planned_data = pickle.load(open(os.path.join(planned_path_name, planned_file_name), 'rb'))
 
@@ -606,7 +609,7 @@ if __name__ == '__main__':
     #                          )
 
     # robot experiment - special scenes
-    scene_path_name = '/home/yongpeng/research/R3T_shared/data/debug/real_experiment'
+    scene_path_name = os.path.join(r3t_root_dir, "data", "debug/real_experiment")
     scene_file_name = 'pushaway_circle_obstacle_scene.pkl'
     scene_data = pickle.load(open(os.path.join(scene_path_name, scene_file_name), 'rb'))
     basic_info = ContactBasic(miu_list=scene_data['obstacle']['miu'],
