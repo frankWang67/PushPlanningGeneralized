@@ -19,7 +19,7 @@ class ContactBasic:
     including friction coefficient, geometry ...
     """
     def __init__(self, miu_list=None, geom_list=None, A_list=None, geom_target=None, A_target=None, \
-                    miu_pusher_slider=0.3, contact_time=0.) -> None:
+                    miu_pusher_slider=0.3, contact_time=0., is_rect_flag=None) -> None:
         self.miu_list = miu_list  # friction coeff between all objects and target
         self.geom_list = geom_list  # geometry of all objects
         self.A_list = A_list  # limit surface of all obstacles
@@ -27,6 +27,10 @@ class ContactBasic:
         self.A_target = A_target  # limit surface of the target object
         self.miu_pusher_slider = miu_pusher_slider  # the friction coefficient between pusher and slider
         self.contact_time = contact_time
+        if is_rect_flag is None:
+            self.is_rect_flag = [True for i in range(len(self.geom_list))]  # same length as geom_list
+        else:
+            self.is_rect_flag = is_rect_flag
         # FIXME: more to be added
 
 class PlanningScene:

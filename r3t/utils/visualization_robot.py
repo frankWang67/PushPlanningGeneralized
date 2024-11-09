@@ -4,7 +4,6 @@ from matplotlib import collections as mc
 from matplotlib import transforms, animation
 import numpy as np
 import os
-from r3t.symbolic_system.examples.hopper_2D_visualize import *
 import pypolycontain.visualization.visualize_2D as vis2D
 from polytope_symbolic_system.common.utils import *
 
@@ -577,7 +576,7 @@ def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0, xl
         repeat=False
     )
 
-    anim.save('./video/R3T_contact_planning.mp4', fps=25, extra_args=['-vcodec', 'libx264'])
+    anim.save('./video/R3T_contact_planning.mp4', fps=25, extra_args=['-vcodec', 'mpeg4'])
 
     # plot control inputs
     fig2, axes2 = plt.subplots(1, 3, sharex=True)
@@ -595,7 +594,7 @@ if __name__ == '__main__':
     from r3t.polygon.scene import *
     # WARNING: partially initialized
 
-    planned_path_name = '/home/yongpeng/research/R3T_shared/data/debug/real_experiment'
+    planned_path_name = '/home/yongpeng/research/R3T_shared/data/debug/real_experiment/circular_pushaway_saved_path/saved_path0'
     planned_file_name = 'planned_path.pkl'
     planned_data = pickle.load(open(os.path.join(planned_path_name, planned_file_name), 'rb'))
 

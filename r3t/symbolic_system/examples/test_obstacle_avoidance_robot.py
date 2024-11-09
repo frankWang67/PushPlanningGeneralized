@@ -219,7 +219,9 @@ if success:
 
 print('Report: mode consistency rate {0}!'.format(np.sum(planner.polytope_data['consistent'])/len(planner.polytope_data['consistent'])))
 
-import pdb; pdb.set_trace()
+print("The planning results will be stored in {}! \
+        Please check as planned_path.pkl and path_seg.pkl will be override".format(scene_path_name))
+input("Press Enter to continue...")
 # planner.debugger.save()
 # planner.get_scene_of_planned_path(save_dir='/home/yongpeng/research/R3T_shared/data/debug/planned_path')
 planner.get_plan_anim_raw_data(data_root=scene_path_name)

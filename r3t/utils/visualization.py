@@ -3,9 +3,166 @@ import matplotlib.pyplot as plt
 from matplotlib import collections as mc
 from matplotlib import transforms, animation
 import numpy as np
-from r3t.symbolic_system.examples.hopper_2D_visualize import *
 import pypolycontain.visualization.visualize_2D as vis2D
 from polytope_symbolic_system.common.utils import *
+
+## utility functions copied from (planar-)rrt-algorithms
+## ----------------------------------------
+def angle_limit(angle):
+    # soft limit yaw angle to [-pi, pi]
+    return np.arctan2(np.sin(angle), np.cos(angle))
+
+def interpolate_pose(pose0, pose1, geom, p):
+    """
+    Get the linear interpolated pose between start and end
+    :param start: start pose
+    :param end: end pose
+    :param p: coefficient (result=start*(1-p)+end*p)
+    """
+    p_start, p_end = np.zeros((2, 2)), np.zeros((2, 2))
+    p_start[0, :], p_end[0, :] = pose0[:2], pose1[:2]
+    p_start[1, :] = pose0[:2] + np.array([np.cos(pose0[2]), np.sin(pose0[2])]) * geom[0] * 0.5
+    p_end[1, :] = pose1[:2] + np.array([np.cos(pose1[2]), np.sin(pose1[2])]) * geom[0] * 0.5
+    A = 2 * (p_end - p_start)
+    b = np.sum(np.power(p_end, 2) - np.power(p_start, 2), axis=1)
+
+    pose0, pose1 = np.array(pose0), np.array(pose1)
+
+    if np.linalg.matrix_rank(A) < 2:
+        pose_interp = pose0
+        pose_interp[:2] = pose0[:2] * (1-p) + pose1[:2] * p
+        return pose_interp
+    else:
+        center = np.linalg.inv(A) @ b
+        # theta = angle_limit(end[2] - start[2])
+        theta = angle_limit(angle_diff(pose0[2], pose1[2]))
+        pose_interp = pose0
+        rot_matrix = rotation_matrix(theta*p)
+        pose_interp[:2] = center + rot_matrix.dot(pose0[:2]-center)
+        pose_interp[2] = angle_limit(pose0[2]+theta*p)
+        return pose_interp
+
+def distance_between_pose(pose0, pose1, geom):
+    """
+    Convert the change between pose to revolution w.r.t. fixed point
+    :param start: current pose
+    :param end: goal pose
+    :return: Revolute (center: (x, y), angle: theta)
+    """
+    p_start, p_end = np.zeros((2, 2)), np.zeros((2, 2))
+    p_start[0, :], p_end[0, :] = pose0[:2], pose1[:2]
+    p_start[1, :] = pose0[:2] + np.array([np.cos(pose0[2]), np.sin(pose0[2])]) * geom[0] * 0.5
+    p_end[1, :] = pose1[:2] + np.array([np.cos(pose1[2]), np.sin(pose1[2])]) * geom[0] * 0.5
+    A = 2 * (p_end - p_start)
+    b = np.sum(np.power(p_end, 2) - np.power(p_start, 2), axis=1)
+
+    if np.linalg.matrix_rank(A) < 2:
+        return np.linalg.norm(pose0[:2]-pose1[:2])
+    else:
+        center = np.linalg.inv(A) @ b
+        # theta = angle_limit(end[2] - start[2])
+        theta = angle_diff(pose0[2], pose1[2])
+        radius = np.linalg.norm(pose0[0:2] - center[0:2])
+        return radius*theta
+    
+def get_pusher_abs_pos(x_slider, rel_pos):
+    Ri = rotation_matrix(x_slider[2])
+    return x_slider[:2] + Ri.dot(rel_pos.flatten())
+    
+class Revolute(object):
+    def __init__(self, finite, x, y, theta, radius) -> None:
+        self.finite = finite  # False=trans(lation) only or True=revol(ution)
+        self.x = x
+        self.y = y
+        self.theta = theta
+        self.radius = radius
+    
+def pose2steer(start, end, geom):
+    """
+    Convert the change between pose to revolution w.r.t. fixed point
+    :param start: current pose
+    :param end: goal pose
+    :return: Revolute (center: (x, y), angle: theta)
+    """
+    p_start, p_end = np.zeros((2, 2)), np.zeros((2, 2))
+    p_start[0, :], p_end[0, :] = start[:2], end[:2]
+    p_start[1, :] = start[:2] + np.array([np.cos(start[2]), np.sin(start[2])]) * geom[0] * 0.5
+    p_end[1, :] = end[:2] + np.array([np.cos(end[2]), np.sin(end[2])]) * geom[0] * 0.5
+    # p_center = np.concatenate((np.expand_dims(p_start[0, :], 0), np.expand_dims(p_end[0, :], 0)), axis=0)
+    # p_bound = np.concatenate((np.expand_dims(p_start[1, :], 0), np.expand_dims(p_end[1, :], 0)), axis=0)
+    A = 2 * (p_end - p_start)
+    b = np.sum(np.power(p_end, 2) - np.power(p_start, 2), axis=1)
+
+    if np.linalg.matrix_rank(A) < 2:
+        revol = Revolute(finite=False, x=0, y=0, theta=0, radius=0)
+    else:
+        center = np.linalg.inv(A) @ b
+        # theta = angle_limit(end[2] - start[2])
+        theta = angle_diff(start[2], end[2])
+        radius = np.linalg.norm(start[0:2] - center[0:2])
+        revol = Revolute(finite=True, x=center[0], y=center[1], theta=theta, radius=radius)
+
+    return revol
+    
+def get_pusher_rel_pos(start, end, geom, ab_ratio=1/726.136, miu=0.3, rl=0.01):
+    """
+    Check if a Revolute satisfies differential flatness constraints
+    If true, compute the contact point and force direction
+    :param start: starting pose
+    :param end: ending pose
+    :return: True if Revolute is feasible, and False if Revolute is unfeasible
+    """
+    revol = pose2steer(start, end, geom)
+    Xrev = np.array([revol.x, revol.y])
+    Xrev = np.linalg.inv(rotation_matrix(start[2])) @ (Xrev - start[:2])
+    Xc, Yc = Xrev[0] + np.sign(Xrev[0])*1e-10, Xrev[1] + np.sign(Xrev[1])*1e-10  # ROC coordinates
+    Kc = Yc / Xc
+    
+    # forwarding direction
+    forward_dir = rotation_matrix(start[2]).T @ (np.array(end[:2]) - np.array(start[:2]))
+    
+    # check feasible contact point on all 4 faces
+    x_lim, y_lim = 0.5 * geom[0], 0.5 * geom[1]
+    force_dirs, contact_pts = [], []
+    
+    # +X face
+    y0 = (-ab_ratio - x_lim * Xc) / Yc
+    if (-y_lim <= y0 <= y_lim) and (Kc <= -1 / miu or Kc >= 1 / miu):
+        contact_pts.append([x_lim+rl, y0])
+        if Yc >= 0:
+            force_dirs.append([-Yc, Xc])
+        else:
+            force_dirs.append([Yc, -Xc])
+    # -X face
+    y0 = (-ab_ratio - (-x_lim) * Xc) / Yc
+    if (-y_lim <= y0 <= y_lim) and (Kc <= -1 / miu or Kc >= 1 / miu):
+        contact_pts.append([-x_lim-rl, y0])
+        if Yc >= 0:
+            force_dirs.append([Yc, -Xc])
+        else:
+            force_dirs.append([-Yc, Xc])
+    # +Y face
+    x0 = (-ab_ratio - y_lim * Yc) / Xc
+    if (-x_lim <= x0 <= x_lim) and (-miu <= Kc <= miu):
+        contact_pts.append([x0, y_lim+rl])
+        if Xc >= 0:
+            force_dirs.append([Yc, -Xc])
+        else:
+            force_dirs.append([-Yc, Xc])
+    # -Y face
+    x0 = (-ab_ratio - (-y_lim) * Yc) / Xc
+    if (-x_lim <= x0 <= x_lim) and (-miu <= Kc <= miu):
+        contact_pts.append([x0, -y_lim-rl])
+        if Xc >= 0:
+            force_dirs.append([-Yc, Xc])
+        else:
+            force_dirs.append([Yc, -Xc])
+    
+    # the pusher's contact force and the slider's forwarding direction keeps acute angle
+    idx = np.where((np.array(force_dirs).reshape(-1, 2) @ forward_dir) > 0)[0]
+    contact_pts = np.array(contact_pts).T
+    return contact_pts[:, idx]
+## ----------------------------------------
 
 def visualize_node_tree_2D(rrt, fig=None, ax=None, s=1, linewidths = 0.25, show_path_to_goal=False, goal_override=None, dims=[0,1]):
     if fig is None or ax is None:
@@ -361,14 +518,49 @@ def visualize_projected_ND_polytopic_tree(rrt, dim1, dim2, fig=None, ax=None, s=
     return fig, ax
 
 class PushPlanningVisualizer:
-    def __init__(self, basic_info, visual_data) -> None:
+    def __init__(self, basic_info, visual_data, X0_obstacles, pose_interp) -> None:
         self.contact_basic = basic_info
         self.X_slider = visual_data['X_slider']
-        self.X_pusher = visual_data['X_pusher']
-        self.U_slider = visual_data['U_slider']
-        self.X_obstacles = visual_data['X_obstacles']
+        if 'X_pusher' in visual_data.keys():
+            self.X_pusher = visual_data['X_pusher']
+        else:
+            self.X_pusher = []
+
+        # interpolate poses
+        interpolation_distance = 0.005
+        if pose_interp:
+            X_slider_interpolated = []
+            for i in range(len(self.X_slider)-1):
+                pusher_rel_pos = get_pusher_rel_pos(self.X_slider[i], self.X_slider[i+1], \
+                                                    geom=self.contact_basic.geom_target)
+                X_slider_interpolated.append(self.X_slider[i])
+                self.X_pusher.append(get_pusher_abs_pos(np.array(self.X_slider[i]), pusher_rel_pos).tolist())
+
+                path_seg_length = distance_between_pose(self.X_slider[i], self.X_slider[i+1], \
+                                                        geom=self.contact_basic.geom_target)
+                num_interp_steps = round(abs(path_seg_length)/interpolation_distance)
+                for p in np.linspace(0.0, 1.0, max(5, num_interp_steps))[1:-1]:
+                    new_pose_interp = interpolate_pose(pose0=self.X_slider[i], \
+                                                       pose1=self.X_slider[i+1], \
+                                                       geom=self.contact_basic.geom_target, \
+                                                       p=p)
+                    X_slider_interpolated.append(list(new_pose_interp))
+                    self.X_pusher.append(get_pusher_abs_pos(np.array(new_pose_interp), pusher_rel_pos).tolist())
+            X_slider_interpolated.append(self.X_slider[-1])
+            self.X_pusher.append(get_pusher_abs_pos(np.array(self.X_slider[-1]), pusher_rel_pos).tolist())
+
+            self.X_slider = X_slider_interpolated.copy()
 
         self.num_frames = len(self.X_slider)
+
+        if 'U_slider' in visual_data.keys():
+            self.U_slider = visual_data['U_slider']
+        else:
+            self.U_slider = None
+        if 'X_obstacles' in visual_data.keys():
+            self.X_obstacles = visual_data['X_obstacles']
+        else:
+            self.X_obstacles = [X0_obstacles] * self.num_frames
 
     def set_patches(self, ax):
         """
@@ -383,32 +575,45 @@ class PushPlanningVisualizer:
         self.slider = patches.Rectangle(
             x_s0[:2]+bias_s0[:2], Xl, Yl, angle=0.0, facecolor='#1f77b4', edgecolor='black'
         )
+        ax.add_patch(self.slider)
 
         # plot pusher
-        x_p0 = self.X_pusher[0]
-        self.pusher = patches.Circle(
-            x_p0, radius=Rl, facecolor='#7f7f7f', edgecolor='black'
-        )
+        if self.X_pusher is not None:
+            x_p0 = self.X_pusher[0]
+            self.pusher = patches.Circle(
+                x_p0, radius=Rl, facecolor='#7f7f7f', edgecolor='black'
+            )
+            ax.add_patch(self.pusher)
 
         # plot obstacles
-        self.obstacles = []
-        self.num_obstacles = len(self.X_obstacles[0])
-        cmap = plt.cm.Pastel2
-        for k in range(self.num_obstacles):
-            x_o0 = self.X_obstacles[0][k]
-            Xl, Yl = self.contact_basic.geom_list[k]
-            R_o0 = rotation_matrix(0.0)
-            bias_o0 = R_o0.dot([-Xl/2., -Yl/2.])
-            new_obstacle = patches.Rectangle(
-                x_o0[:2]+bias_o0[:2], Xl, Yl, angle=0.0, facecolor=cmap(k), edgecolor='black'
-            )
-            self.obstacles.append(new_obstacle)
-        
-        # add patches
-        ax.add_patch(self.slider)
-        ax.add_patch(self.pusher)
-        for k in range(self.num_obstacles):
-            ax.add_patch(self.obstacles[k])
+        if self.X_obstacles is not None:
+            self.obstacles = []
+            self.num_obstacles = len(self.X_obstacles[0])
+            cmap = plt.cm.Pastel2
+            for k in range(self.num_obstacles):
+                if k==1:
+                    polygon_facecolor = "grey"
+                else:
+                    polygon_facecolor = cmap(k)
+                if self.contact_basic.is_rect_flag[k]:
+                    x_o0 = self.X_obstacles[0][k]
+                    Xl, Yl = self.contact_basic.geom_list[k]
+                    R_o0 = rotation_matrix(0.0)
+                    bias_o0 = R_o0.dot([-Xl/2., -Yl/2.])
+                    new_obstacle = patches.Rectangle(
+                        x_o0[:2]+bias_o0[:2], Xl, Yl, angle=0.0, facecolor=polygon_facecolor, edgecolor='black'
+                    )
+                    self.obstacles.append(new_obstacle)
+                else:
+                    coords_before_transform = self.contact_basic.geom_list[k]
+                    R_o0 = rotation_matrix(0.0)
+                    coords_after_transform = np.array([0.0, 0.0]) + R_o0.dot(np.array(coords_before_transform).T).T
+                    new_obstacle = patches.Polygon(
+                        xy=coords_after_transform, facecolor=polygon_facecolor, edgecolor='black'
+                    )
+                    self.obstacles.append(new_obstacle)
+            for k in range(self.num_obstacles):
+                ax.add_patch(self.obstacles[k])
 
     def animate(self, i, ax):
         """
@@ -433,23 +638,32 @@ class PushPlanningVisualizer:
         self.slider.set_xy([x_si[0]+bias_si[0], x_si[1]+bias_si[1]])
 
         # render pusher
-        x_pi = self.X_pusher[i]
-        self.pusher.set_center(x_pi)
+        if self.X_pusher is not None:
+            x_pi = self.X_pusher[i]
+            self.pusher.set_center(x_pi)
 
         # render obstacles
-        for k in range(self.num_obstacles):
-            x_oi = self.X_obstacles[i][k]
-            Xl, Yl = self.contact_basic.geom_list[k]
-            R_oi = rotation_matrix(x_oi[2])
-            bias_oi = R_oi.dot([-Xl/2., -Yl/2.])
+        if self.X_obstacles is not None:
+            for k in range(self.num_obstacles):
+                if self.contact_basic.is_rect_flag[k]:
+                    x_oi = self.X_obstacles[i][k]
+                    Xl, Yl = self.contact_basic.geom_list[k]
+                    R_oi = rotation_matrix(x_oi[2])
+                    bias_oi = R_oi.dot([-Xl/2., -Yl/2.])
 
-            bottom_left_coords = x_oi[:2] + bias_oi[:2]
-            bottom_left_coords = trans_ax.transform(bottom_left_coords)
-            trans_oi = transforms.Affine2D().rotate_around(
-                bottom_left_coords[0], bottom_left_coords[1], x_oi[2]
-            )
-            self.obstacles[k].set_transform(trans_ax+trans_oi)
-            self.obstacles[k].set_xy([x_oi[0]+bias_oi[0], x_oi[1]+bias_oi[1]])
+                    bottom_left_coords = x_oi[:2] + bias_oi[:2]
+                    bottom_left_coords = trans_ax.transform(bottom_left_coords)
+                    trans_oi = transforms.Affine2D().rotate_around(
+                        bottom_left_coords[0], bottom_left_coords[1], x_oi[2]
+                    )
+                    self.obstacles[k].set_transform(trans_ax+trans_oi)
+                    self.obstacles[k].set_xy([x_oi[0]+bias_oi[0], x_oi[1]+bias_oi[1]])
+                else:
+                    x_oi = self.X_obstacles[i][k]
+                    coords_before_transform = self.contact_basic.geom_list[k]
+                    R_oi = rotation_matrix(x_oi[2])
+                    coords_after_transform = x_oi[:2] + R_oi.dot(np.array(coords_before_transform).T).T
+                    self.obstacles[k].set_xy(coords_after_transform)
         
         return []
 
@@ -536,7 +750,7 @@ class PushPlanningVisualizer:
         axes[2].set_ylabel('psic (rad)')
         axes[2].grid('on')
 
-def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0):
+def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0, enlarge_canvas=False):
     """
     Plot animation of push planning
     :param visualizer: the PushPlanningVisualizer object
@@ -547,8 +761,15 @@ def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0):
     fig.canvas.manager.set_window_title('Planning Scene')
 
     # set limit
-    ax.set_xlim([0.0, 0.5])
-    ax.set_ylim([0.0, 0.5])
+    if enlarge_canvas:
+        ax.set_xlim([-0.05, 0.55])
+        ax.set_ylim([-0.05, 0.55])
+    else:
+        ax.set_xlim([0.0, 0.5])
+        ax.set_ylim([0.0, 0.5])
+
+    x_slider_arr = np.array(visualizer.X_slider)
+    ax.plot(x_slider_arr[:, 0], x_slider_arr[:, 1], linewidth=2, linestyle='--', color='lightcoral')
 
     # for robot experiment
     # ax.set_xlim([0.3, 0.9])
@@ -576,17 +797,17 @@ def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0):
         repeat=False
     )
 
-    anim.save('./video/R3T_contact_planning.mp4', fps=25, extra_args=['-vcodec', 'libx264'])
+    anim.save('./video/R3T_contact_planning.mp4', fps=25, extra_args=['-vcodec', 'mpeg4'])
 
     # plot control inputs
-    fig2, axes2 = plt.subplots(1, 3, sharex=True)
-    fig2.set_size_inches(9, 3, forward=True)
-    visualizer.plot_input(axes2)
+    # fig2, axes2 = plt.subplots(1, 3, sharex=True)
+    # fig2.set_size_inches(9, 3, forward=True)
+    # visualizer.plot_input(axes2)
 
     # plot slider states
-    fig3, axes3 = plt.subplots(1, 3, sharex=True)
-    fig3.set_size_inches(9, 3, forward=True)
-    visualizer.plot_state(axes3)
+    # fig3, axes3 = plt.subplots(1, 3, sharex=True)
+    # fig3.set_size_inches(9, 3, forward=True)
+    # visualizer.plot_state(axes3)
 
     plt.show()
 
@@ -594,18 +815,36 @@ if __name__ == '__main__':
     from r3t.polygon.scene import *
     # WARNING: partially initialized
     # test_scene_0
-    basic_info = ContactBasic(miu_list=[0.3 for i in range(3)],
-                              geom_list=[[0.07, 0.12] for i in range(3)],
-                              geom_target=[0.07, 0.12, 0.01],
-                              contact_time=0.05
-                             )
+    # basic_info = ContactBasic(miu_list=[0.3 for i in range(3)],
+    #                           geom_list=[[0.07, 0.12] for i in range(3)],
+    #                           geom_target=[0.07, 0.12, 0.01],
+    #                           contact_time=0.05
+    #                          )
 
-    # test_scene_1
+    ## ???
+    # test_scene_1 (deprecated)
     # basic_info = ContactBasic(miu_list=[0.3 for i in range(5)],
     #                           geom_list=[[0.06, 0.12], [0.12, 0.12], [0.06, 0.12], [0.06, 0.12], [0.06, 0.12]],
     #                           geom_target=[0.07, 0.12, 0.01],
     #                           contact_time=0.05
     #                          )
+
+    # test_scene_1
+    basic_info = ContactBasic(miu_list=[0.3 for i in range(5)],
+                              geom_list=[[0.06, 0.12], \
+                                         [[0.03, 0.03*np.sqrt(3)], [0.06, 0], [0.03, -0.03*np.sqrt(3)], [-0.03, -0.03*np.sqrt(3)], [-0.06, 0], [-0.03, 0.03*np.sqrt(3)]], \
+                                         [0.06, 0.12], \
+                                         [0.06, 0.12], \
+                                         [0.06, 0.12]],
+                              geom_target=[0.07, 0.12, 0.01],
+                              contact_time=0.05,
+                              is_rect_flag=[True, False, True, True, True]
+                             )
+    X0_obstacles = np.array([[0.12, 0.20, 0.75*np.pi],
+                             [0.25, 0.30, 0.0*np.pi],
+                             [0.38, 0.20, 0.25*np.pi],
+                             [0.12, 0.40, -0.75*np.pi],
+                             [0.38, 0.40, -0.25*np.pi]])
 
     # robot experiment
     # basic_info = ContactBasic(miu_list=[0.3 for i in range(3)],
@@ -614,13 +853,18 @@ if __name__ == '__main__':
     #                           contact_time=0.05
     #                          )
 
-    timestamp = 'segmented_path/2023_02_05_11_37'
-    data = pickle.load(open('/home/yongpeng/research/R3T_shared/data/debug/{0}/output.pkl'.format(timestamp), 'rb'))
+    # timestamp = 'segmented_path/2023_02_05_11_37'
+    # data = pickle.load(open('/home/yongpeng/research/R3T_shared/data/debug/{0}/output.pkl'.format(timestamp), 'rb'))
     # data = pickle.load(open('/home/yongpeng/research/R3T_shared/data/exp/2023_07_07_01_13/0.pkl', 'rb'))
-    import pdb; pdb.set_trace()
+
+    # data = pickle.load(open('/home/yongpeng/research/R3T_shared/data/exp/new_model/scene1/2023_07_07_15_27_(2)/3.pkl', 'rb'))
+    data = pickle.load(open('/home/yongpeng/research/rrt-algorithms/data/exp/search_space_0.0_0.5_0.0_0.5/scene_1_10_round_#1/4.pkl', 'rb'))
+    
     visualizer = PushPlanningVisualizer(basic_info=basic_info,
-                                        visual_data=data)
+                                        visual_data=data,
+                                        X0_obstacles=X0_obstacles,
+                                        pose_interp=True)
 
     # TEST ANIMATION
-    test_plot_push_planning(visualizer, vel_scale=1.0)
+    test_plot_push_planning(visualizer, vel_scale=1.0, enlarge_canvas=True)
     

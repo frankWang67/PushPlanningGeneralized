@@ -3,10 +3,11 @@
 *.zip
 
 # data
-data/debug/
-data/json/
-data/scene/
+data/
 
-R3T_Pendulum_*/
-R3T_Hopper_1d_*/
-R3T_Hopper_2d_*/
+# Ignore all __pycache__ directories
+__pycache__/
+
+# Ignore Python bytecode files
+*.pyc
+*.pyo

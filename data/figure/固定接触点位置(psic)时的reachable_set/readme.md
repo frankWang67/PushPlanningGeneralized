@@ -1,3 +1,0 @@
-每个state对应其reachable set；
-reachable set由4片polygon组成，代表从4个不同的面一个面推动时的reachable polygon；
-对于一个特定的state，接触面是已知的，所以从其中一个接触面推动的reachable polygon是会随着psic变化的，其他3个接触面对应的reachable polygon均对应psic=0，即接触面中点位置；

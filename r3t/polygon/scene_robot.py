@@ -11,7 +11,7 @@ from r3t.polygon.scene import *
 # import pdb; pdb.set_trace()
 
 # scene, basic = load_planning_scene_from_file(scene_pkl)
-# fig, ax = visualize_scene(scene, alpha=0.25, xlim=[0.26, 0.80], ylim=[-0.09, 0.45])
+# fig, ax = visualize_scene(scene, alpha=0.25, xlim=[0.26, 0.80], ylim=[-0.09, 0.45], movability=scene.types)
 # plt.show()
 #  -------------------------------------------------
 
@@ -25,7 +25,7 @@ from r3t.polygon.scene import *
 # import pdb; pdb.set_trace()
 
 # scene, basic = load_planning_scene_from_file(scene_pkl)
-# fig, ax = visualize_scene(scene, alpha=0.25, xlim=[0.26, 0.80], ylim=[-0.06, 0.48])
+# fig, ax = visualize_scene(scene, alpha=0.25, xlim=[0.26, 0.80], ylim=[-0.06, 0.48], movability=scene.types)
 # plt.show()
 #  -------------------------------------------------
 
@@ -39,6 +39,6 @@ scene_data = pickle.load(open(scene_pkl, 'rb'))
 import pdb; pdb.set_trace()
 
 scene, basic = load_planning_scene_from_file(scene_pkl)
-fig, ax = visualize_scene(scene, alpha=0.25, xlim=[0.23, 0.77], ylim=[-0.06, 0.48])
+fig, ax = visualize_scene(scene, alpha=0.25, xlim=[0.23, 0.77], ylim=[-0.06, 0.48], movability=scene.types)
 plt.show()
 #  -------------------------------------------------

@@ -8,15 +8,18 @@ except:
 
 # Pydrake
 try:
-    import pydrake.solvers.mathematicalprogram as MP
-    import pydrake.solvers.gurobi as Gurobi_drake
-    import pydrake.solvers.osqp as OSQP_drake
+    import pydrake
+    # import pydrake.solvers.mathematicalprogram as MP
+    # import pydrake.solvers.gurobi as Gurobi_drake
+    # import pydrake.solvers.osqp as OSQP_drake
+    from pydrake.solvers import MathematicalProgram, Solve
+    from pydrake.solvers import GurobiSolver, OsqpSolver
     from pydrake.solvers import SolverOptions
     # use Gurobi solver
     global gurobi_solver,OSQP_solver, license
-    gurobi_solver=Gurobi_drake.GurobiSolver()
+    gurobi_solver=GurobiSolver()
     license = gurobi_solver.AcquireLicense()
-    OSQP_solver=OSQP_drake.OsqpSolver()
+    OSQP_solver=OsqpSolver()
 except:
     warnings.warn("You don't have pydrake installed properly. Methods that rely on optimization may fail.")
     
@@ -61,7 +64,7 @@ def point_membership(Q,x,tol=10**-5,solver="gurobi"):
         return Q.if_inside(x,tol)
     else:
         Q=to_AH_polytope(Q)
-        prog=MP.MathematicalProgram()
+        prog=MathematicalProgram()
         zeta=prog.NewContinuousVariables(Q.P.H.shape[1],1,"zeta")
         prog.AddLinearConstraint(A=Q.P.H,ub=Q.P.h+tol,lb=-np.inf*np.ones((Q.P.h.shape[0],1)),vars=zeta)
         prog.AddLinearEqualityConstraint(Q.T,x-Q.t,zeta)
@@ -71,7 +74,7 @@ def point_membership(Q,x,tol=10**-5,solver="gurobi"):
             prog.AddQuadraticCost(np.eye(zeta.shape[0]),np.zeros(zeta.shape),zeta)
             result=OSQP_solver.Solve(prog,None,None)
         else:
-            result=MP.Solve(prog)
+            result=Solve(prog)
     return result.is_success()
 
 def point_membership_fuzzy(Q,x,tol=10**-5,solver="gurobi"):
@@ -84,7 +87,7 @@ def point_membership_fuzzy(Q,x,tol=10**-5,solver="gurobi"):
     @return: boolean of whether x is in Q
     """
     Q=to_AH_polytope(Q)
-    prog=MP.MathematicalProgram()
+    prog=MathematicalProgram()
     zeta=prog.NewContinuousVariables(Q.P.H.shape[1],1,"zeta")
     prog.AddLinearConstraint(A=Q.P.H,ub=Q.P.h+tol,lb=-np.inf*np.ones((Q.P.h.shape[0],1)),vars=zeta)
     assert(x.shape[1]==1)
@@ -97,12 +100,12 @@ def point_membership_fuzzy(Q,x,tol=10**-5,solver="gurobi"):
         prog.AddQuadraticCost(np.eye(zeta.shape[0]),np.zeros(zeta.shape),zeta)
         result=OSQP_solver.Solve(prog,None,None)
     else:
-        result=MP.Solve(prog)
+        result=Solve(prog)
     return result.is_success()
 
 def check_non_empty(Q,tol=10**-5,solver="gurobi"):
     Q=to_AH_polytope(Q)
-    prog=MP.MathematicalProgram()
+    prog=MathematicalProgram()
     zeta=prog.NewContinuousVariables(Q.P.H.shape[1],1,"zeta")
     prog.AddLinearConstraint(A=Q.P.H,ub=Q.P.h+tol,lb=-np.inf*np.ones((Q.P.h.shape[0],1)),vars=zeta)
     if solver=="gurobi":
@@ -111,7 +114,7 @@ def check_non_empty(Q,tol=10**-5,solver="gurobi"):
         prog.AddQuadraticCost(np.eye(zeta.shape[0]),np.zeros(zeta.shape),zeta)
         result=OSQP_solver.Solve(prog,None,None)
     else:
-        result=MP.Solve(prog)
+        result=Solve(prog)
     return result.is_success()
 
 def directed_Hausdorff_distance(Q1,Q2,ball="infinty_norm",solver="gurobi"):
@@ -146,7 +149,7 @@ def directed_Hausdorff_distance(Q1,Q2,ball="infinty_norm",solver="gurobi"):
         hB=np.vstack((np.ones((n,1)),np.ones((n,1))))
     elif ball=="l1":
         HB,hb=make_ball(ball)
-    prog=MP.MathematicalProgram()
+    prog=MathematicalProgram()
     # Variables
     D=prog.NewContinuousVariables(1,1,"D")
     Lambda_1=prog.NewContinuousVariables(Q2.P.H.shape[0],Q1.P.H.shape[0],"Lambda_1")
@@ -184,7 +187,7 @@ def directed_Hausdorff_distance(Q1,Q2,ball="infinty_norm",solver="gurobi"):
         prog.AddQuadraticCost(D[0,0]*D[0,0])
         result=OSQP_solver.Solve(prog,None,None)
     else:
-        result=MP.Solve(prog)
+        result=Solve(prog)
     if result.is_success():
         return np.asscalar(result.GetSolution(D))
 
@@ -194,7 +197,7 @@ def Hausdorff_distance(Q1,Q2,ball="infinty_norm",solver="gurobi"):
 def distance_polytopes(Q1,Q2,ball="infinity",solver="gurobi"):
     Q1,Q2=to_AH_polytope(Q1),to_AH_polytope(Q2)
     n=Q1.n
-    prog=MP.MathematicalProgram()
+    prog=MathematicalProgram()
     zeta1=prog.NewContinuousVariables(Q1.P.H.shape[1],1,"zeta1")
     zeta2=prog.NewContinuousVariables(Q2.P.H.shape[1],1,"zeta2")
     delta=prog.NewContinuousVariables(n,1,"delta")
@@ -223,7 +226,7 @@ def distance_polytopes(Q1,Q2,ball="infinity",solver="gurobi"):
         result=OSQP_solver.Solve(prog,None,None)
     else:
         prog.AddLinearCost(cost[0,0])
-        result=MP.Solve(prog)
+        result=Solve(prog)
     if result.is_success():
         return np.sum(result.GetSolution(delta_abs)),\
             np.dot(Q1.T,result.GetSolution(zeta1).reshape(zeta1.shape[0],1))+Q1.t,\
@@ -240,7 +243,7 @@ def _setup_program_distance_point(P,ball="infinity",solver="Gurobi",distance_sca
     AH_polytope: Q={t+Tx | x \in R^p, Hx <= h} \in R^{n \cdot p}
     """
     if P.distance_program is None:
-        prog=MP.MathematicalProgram()
+        prog=MathematicalProgram()
         Q=to_AH_polytope(P)
         n=Q.n
         x=np.zeros((n,1))
@@ -311,7 +314,7 @@ def distance_point_polytope(P, x, ball="infinity", solver="Gurobi", distance_sca
     elif solver=="osqp":
         result=OSQP_solver.Solve(prog,None,None)
     else:
-        result=MP.Solve(prog)
+        result=Solve(prog)
     if result.is_success():
         # z s.t. Hz <= h
         zeta_num=result.GetSolution(P.zeta).reshape(P.zeta.shape[0],1)
@@ -355,7 +358,7 @@ def distance_point_polytope_with_multiple_azimuth(polytope, query_point, ball='l
 
 def bounding_box(Q,solver="Gurobi"):
     Q=to_AH_polytope(Q)
-    prog=MP.MathematicalProgram()
+    prog=MathematicalProgram()
     zeta=prog.NewContinuousVariables(Q.P.H.shape[1],1,"zeta")
     x=prog.NewContinuousVariables(Q.n,1,"x")
     prog.AddLinearConstraint(A=Q.P.H,ub=Q.P.h,lb=-np.inf*np.ones((Q.P.h.shape[0],1)),vars=zeta)
@@ -428,7 +431,7 @@ def AH_polytope_vertices(P,N=200,epsilon=0.001,solver="Gurobi"):
     except:
         Q=to_AH_polytope(P)
         v=np.empty((N,2))
-        prog=MP.MathematicalProgram()
+        prog=MathematicalProgram()
         zeta=prog.NewContinuousVariables(Q.P.H.shape[1],1,"zeta")
         prog.AddLinearConstraint(A=Q.P.H,ub=Q.P.h,lb=-np.inf*np.ones((Q.P.h.shape[0],1)),vars=zeta)
         theta=1
