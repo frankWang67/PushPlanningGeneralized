@@ -74,3 +74,65 @@ for ny in range(N):
         yy += (k1_y + 2*k2_y + 2*k3_y + k4_y)/6
 rect_cs = cs.Function('rect_cs', [xLenght, yLenght], [Q])
 square_cs = cs.Function('square_cs', [sLenght], [rect_cs(sLenght, sLenght)])
+
+# -------------------------------------------------------------------
+# 2D casadi integration of g
+# integrand g'=f(x, y)
+# integrate sqrt(x^2+y^2) dxdy for (x, y) in a polygon
+# h equals to DX and DY for x and y separately
+num_pts = cs.SX.sym('num_pts')
+pts = cs.SX.sym('pts', num_pts, 2)
+max_x, min_x, max_y, min_y = cs.mmax(pts[:, 0]), cs.mmin(pts[:, 0]), cs.mmax(pts[:, 1]), cs.mmin(pts[:, 1])
+x_len = max_x - min_x
+y_len = max_y - min_y
+DX = x_len/(N*M)
+DY = y_len/(N*M)
+
+def in_polygon(x, y, pts):
+    """
+    Check if a point is inside a polygon
+    """
+    n = len(pts)
+    inside = False
+    for i in range(n):
+        x1, y1 = pts[i, 0], pts[i, 1]
+        x2, y2 = pts[(i+1)%n, 0], pts[(i+1)%n, 1]
+        if (y1 <= y and y < y2) or (y2 <= y and y < y1):
+            x_intersect = (x2 - x1) * (y - y1) / (y2 - y1) + x1
+            if x < x_intersect:
+                inside = not inside
+    return inside
+
+g = cs.Function('h_ext', [x, y], [DX, DY, (1.0 if in_polygon(x, y, pts) else 0.0)*DX*DY])
+Q = 0  # initialize cost
+yy = -y_len/2  # initialize initial cond
+for ny in range(N):
+    for my in range(M):
+        xx = -x_len/2
+        for nx in range(N):
+            for mx in range(M):
+                k1_x, k1_y, k1_q = g(xx, yy)
+                k2_x, k2_y, k2_q = g(xx + k1_x/2, yy + k1_y/2)
+                k3_x, k3_y, k3_q = g(xx + k2_x/2, yy + k2_y/2)
+                k4_x, k4_y, k4_q = g(xx + k3_x, yy + k3_y)
+                Q += (k1_q + 2*k2_q + 2*k3_q + k4_q)/6
+                xx += (k1_x + 2*k2_x + 2*k3_x + k4_x)/6
+        yy += (k1_y + 2*k2_y + 2*k3_y + k4_y)/6
+poly_area = cs.Function('poly_area', [pts, num_pts], [Q])
+
+g = cs.Function('h_ext', [x, y], [DX, DY, (cs.sqrt((x**2)+(y**2)) if in_polygon(x, y, pts) else 0.0)*DX*DY])
+Q = 0  # initialize cost
+yy = -y_len/2  # initialize initial cond
+for ny in range(N):
+    for my in range(M):
+        xx = -x_len/2
+        for nx in range(N):
+            for mx in range(M):
+                k1_x, k1_y, k1_q = g(xx, yy)
+                k2_x, k2_y, k2_q = g(xx + k1_x/2, yy + k1_y/2)
+                k3_x, k3_y, k3_q = g(xx + k2_x/2, yy + k2_y/2)
+                k4_x, k4_y, k4_q = g(xx + k3_x, yy + k3_y)
+                Q += (k1_q + 2*k2_q + 2*k3_q + k4_q)/6
+                xx += (k1_x + 2*k2_x + 2*k3_x + k4_x)/6
+        yy += (k1_y + 2*k2_y + 2*k3_y + k4_y)/6
+poly_cs = cs.Function('poly_cs', [pts, num_pts], [Q])

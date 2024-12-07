@@ -8,7 +8,7 @@ from pypolycontain.lib.zonotope import *
 from pypolycontain.lib.AH_polytope import AH_polytope
 from pypolycontain.lib.objects import H_polytope
 from pypolycontain.lib.operations import *
-from polytope_symbolic_system.common.intfunc import rect_cs
+from polytope_symbolic_system.common.intfunc import poly_area, poly_cs
 from polytope_symbolic_system.common.utils import *
 
 
@@ -449,13 +449,8 @@ class PushDTHybridSystem:
         self.reachable_set_time_step = reachable_set_time_step  # default: 0.05
         self.nldynamics_time_step = nldynamics_time_step  # default: 0.01
 
-        self.contact_face_list = ['front', 'back', 'left', 'right']
         # self.contact_mode_list = ['sticking', 'sliding_left', 'sliding_right']  # not necessary to explicitly use sliding
         self.contact_mode_list = ['sticking']
-        self.psic_each_face_center = {'front': 0.,
-                                      'back': np.pi,
-                                      'left': 0.5*np.pi,
-                                      'right': -0.5*np.pi}
         self.u_domain_polytope_keypoint = {'sticking': np.array([[0., 0., 0.],
                                                                  [self.f_lim, self.miu_slider_pusher*self.f_lim, 0.],
                                                                  [self.f_lim, -self.miu_slider_pusher*self.f_lim, 0.]]),
@@ -467,13 +462,9 @@ class PushDTHybridSystem:
                                                                       [self.f_lim, -self.miu_slider_pusher*self.f_lim, 0.],
                                                                       [0., 0., self.dpsic_lim],
                                                                       [self.f_lim, -self.miu_slider_pusher*self.f_lim, self.dpsic_lim]])}
-        self.num_contact_face = len(self.contact_face_list)
         self.num_contact_mode = len(self.contact_mode_list)
 
-        self.dynamics_mode_list = []
-        for contact_face in self.contact_face_list:
-            for contact_mode in self.contact_mode_list:
-                self.dynamics_mode_list.append((contact_face, contact_mode))
+        self.dynamics_mode_list = self.contact_mode_list
 
         #  -------------------------------------------------------------------
 
@@ -497,18 +488,17 @@ class PushDTHybridSystem:
         self.u = cs.veccat(__fn, __ft, __dpsic)
         self.dim_u = 3
 
-        __fn_bar = cs.SX.sym('fn_bar')
-        __ft_bar = cs.SX.sym('ft_bar')
+        __fx_bar = cs.SX.sym('fx_bar')
+        __fy_bar = cs.SX.sym('fy_bar')
         __dpsic_bar = cs.SX.sym('dpsic_bar')
-        self.u_bar = cs.veccat(__fn_bar, __ft_bar, __dpsic_bar)
+        self.u_bar = cs.veccat(__fx_bar, __fy_bar, __dpsic_bar)
 
-        __xl = cs.SX.sym('xl')
-        __yl = cs.SX.sym('yl')
-        __rl = cs.SX.sym('rl')
-        self.beta = cs.veccat(__xl, __yl, __rl)
+        __num_pts = cs.SX.sym('num_pts')
+        __pts = cs.SX.sym('pts', __num_pts, 2) # TODO: debug this defination
+        self.beta = __pts
         
-        __Area = __xl*__yl
-        __int_Area = rect_cs(__xl, __yl)
+        __Area = poly_area(__pts, __num_pts)
+        __int_Area = poly_cs(__pts, __num_pts)
         __c = __int_Area/__Area
         __A = cs.SX.sym('__A', cs.Sparsity.diag(3))
         __A[0,0] = __A[1,1] = 1.; __A[2,2] = 1./(__c**2)
