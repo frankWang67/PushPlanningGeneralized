@@ -422,9 +422,9 @@ class DTHybridSystem:
 
 
 class PushDTHybridSystem:
-    def __init__(self, f_lim=0.3, dpsic_lim=3.0, unilateral_sliding_region=0.005, slider_geom=[0.07, 0.12, 0.01],
-                       miu_slider_pusher=0.3, miu_slider_ground=0.2, quad_cost_input=[0., 0., 0.],
-                       reachable_set_time_step=0.05, nldynamics_time_step=0.01) -> None:
+    def __init__(self, num_pts, f_lim=0.3, dpsic_lim=3.0, unilateral_sliding_region=0.005, slider_geom=[0.07, 0.12, 0.01],
+                                miu_slider_pusher=0.3, miu_slider_ground=0.2, quad_cost_input=[0., 0., 0.],
+                                reachable_set_time_step=0.05, nldynamics_time_step=0.01) -> None:
         """
         The PushDTHybridSystem, to do forward simulation, compute reachable polytopes of the pusher-slider system
         :param f_lim: contact force limit
@@ -436,6 +436,7 @@ class PushDTHybridSystem:
         :param reachable_set_time_step: time step when computing reachable set
         :param nldynamics_time_step: time step when doing forward simulation
         """
+        self.num_pts = num_pts # number of points to define the polygon slider
         self.f_lim = f_lim  # default: 0.3
         self.dpsic_lim = dpsic_lim  # default: 3.0
         self.unilateral_sliding_region = unilateral_sliding_region  # default: 0.005
@@ -493,12 +494,11 @@ class PushDTHybridSystem:
         __dpsic_bar = cs.SX.sym('dpsic_bar')
         self.u_bar = cs.veccat(__fx_bar, __fy_bar, __dpsic_bar)
 
-        __num_pts = cs.SX.sym('num_pts')
-        __pts = cs.SX.sym('pts', __num_pts, 2) # TODO: debug this defination
+        __pts = cs.SX.sym('pts', self.num_pts, 2)
         self.beta = __pts
         
-        __Area = poly_area(__pts, __num_pts)
-        __int_Area = poly_cs(__pts, __num_pts)
+        __Area = poly_area(__pts)
+        __int_Area = poly_cs(__pts)
         __c = __int_Area/__Area
         __A = cs.SX.sym('__A', cs.Sparsity.diag(3))
         __A[0,0] = __A[1,1] = 1.; __A[2,2] = 1./(__c**2)
