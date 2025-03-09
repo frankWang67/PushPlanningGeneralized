@@ -14,16 +14,20 @@ warnings.filterwarnings("ignore")
 
 import numpy as np
 
+import pickle
+
 from polytope_symbolic_system.common.symbolic_system import *
 from r3t.symbolic_system.symbolic_system_r3t import *
 
 
 # scene configuration
 # --------------------------------------------------
-planning_scene_pkl = os.path.join(r3t_root_dir, "data", "test_scene_0.pkl")
+planning_scene_path = os.path.join(r3t_root_dir, "data", "wshf", "2025_03_09_15_48")
+planning_scene_pkl  = os.path.join(planning_scene_path, "scene.pkl")
+scene = pickle.load(open(planning_scene_pkl, 'rb'))
 # --------------------------------------------------
 
-xmin, xmax, ymin, ymax, thetamin, thetamax = 0.0, 0.5, 0.0, 0.5, -np.pi, np.pi
+xmin, xmax, ymin, ymax, thetamin, thetamax = -0.25, 0.25, -0.30, 0.30, -np.pi, np.pi
 
 search_space_dimensions = np.array([(xmin, xmax), (ymin, ymax), (thetamin, thetamax)])
 # state_space_obstacles = MultiPolygon()  # empty obstacles
@@ -36,10 +40,11 @@ unilateral_sliding_region_width = 0.01  # old: 0.005
 # slider_geometry = [0.07, 0.12, 0.01]
 
 # test on robot
-slider_geometry = [0.07, 0.12, 0.01]
+pusher_r = 0.0075
+slider_geometry = scene['target']['geom'] + [pusher_r]
 
-fric_coeff_slider_pusher = 0.2  # old: 0.3
-fric_coeff_slider_ground = 0.2
+fric_coeff_slider_pusher = 0.1
+fric_coeff_slider_ground = 0.3
 reachable_set_time_step = 0.05
 nonlinear_dynamics_time_step = 0.01
 
@@ -58,14 +63,14 @@ quad_cost_input = np.diag([0.001, 0.001, 5e-6])
 # x_goal = [0.40, 0.30, 0.25*np.pi]
 
 # test planning
-x_init = [0.25, 0.05, 0.5*np.pi]
-x_goal = [0.25, 0.45, 0.5*np.pi]
+x_init = scene['target']['x']
+x_goal = scene['goal']
 
 # test on robot
 # x_init = [0.3836, 0.0014, 0.0011945]
 # x_goal = [0.7836, 0.0014, 0.0011945]
 
-psic_init = np.pi
+psic_init = -0.5 * np.pi
 
 # underlying functions
 def sampler():
@@ -254,13 +259,14 @@ print('Report: mode consistency rate {0}!'.format(np.sum(planner.polytope_data['
 
 import pdb; pdb.set_trace()
 
-timestamp = time.strftime('%Y_%m_%d_%H_%M',time.localtime(int(round(time.time()*1000))/1000))
-report_path = '{}/data/debug'.format(r3t_root_dir) + '/' + str(timestamp)
+# timestamp = time.strftime('%Y_%m_%d_%H_%M',time.localtime(int(round(time.time()*1000))/1000))
+# report_path = '{}/data/debug'.format(r3t_root_dir) + '/' + str(timestamp)
+report_path = planning_scene_path
 
-try:
-    os.mkdir(report_path)
-except:
-    pass
+# try:
+#     os.mkdir(report_path)
+# except:
+#     pass
 
 # planner.debugger.save()
 # planner.get_scene_of_planned_path(save_dir=os.path.join(r3t_root_dir, 'data', 'debug', 'planned_path'))

@@ -608,7 +608,7 @@ class PushDTHybridSystem:
         }
 
         # non-linear dynamics (dt = nldynamics_time_step)
-        self.f_nldyn = {'front': self.x + self.nldynamics_time_step * cs.vertcat(
+        self.f_nldyn = {'front': self.x + self.nldynamics_time_step * cs.vertcat(+
                             cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact['front'].T, 
                             cs.vertcat(cs.mtimes(__norm['front'].T, __f_ctact), cs.mtimes(__tangent['front'].T, __f_ctact))))),
                             __dpsic),

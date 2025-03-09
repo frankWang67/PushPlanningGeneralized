@@ -539,7 +539,7 @@ class PushPlanningVisualizer:
         axes[2].set_ylabel('psic (rad)')
         axes[2].grid('on')
 
-def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0, xlim=None, ylim=None):
+def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0, xlim=None, ylim=None, video_path=None):
     """
     Plot animation of push planning
     :param visualizer: the PushPlanningVisualizer object
@@ -550,8 +550,10 @@ def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0, xl
     fig.canvas.manager.set_window_title('Planning Scene')
 
     # set limit
-    ax.set_xlim(xlim)
-    ax.set_ylim(ylim)
+    if xlim is not None:
+        ax.set_xlim(xlim)
+    if ylim is not None:
+        ax.set_ylim(ylim)
 
     # for robot experiment
     # ax.set_xlim([0.3, 0.9])
@@ -579,7 +581,11 @@ def test_plot_push_planning(visualizer:PushPlanningVisualizer, vel_scale=1.0, xl
         repeat=False
     )
 
-    anim.save('./video/R3T_contact_planning.mp4', fps=25, extra_args=['-vcodec', 'mpeg4'])
+    if video_path is None:
+        video_save_dir = os.path.join(r3t_root_dir, "data", "video")
+    else:
+        video_save_dir = video_path
+    anim.save(os.path.join(video_save_dir, 'R3T_contact_planning.mp4'), fps=25, extra_args=['-vcodec', 'mpeg4'])
 
     # plot control inputs
     fig2, axes2 = plt.subplots(1, 3, sharex=True)
@@ -597,7 +603,7 @@ if __name__ == '__main__':
     from r3t.polygon.scene import *
     # WARNING: partially initialized
 
-    planned_path_name = os.path.join(r3t_root_dir, "data", "debug/real_experiment/circular_pushaway_saved_path/saved_path0")
+    planned_path_name = os.path.join(r3t_root_dir, "data", "wshf", "2025_03_09_15_48")
     planned_file_name = 'planned_path.pkl'
     planned_data = pickle.load(open(os.path.join(planned_path_name, planned_file_name), 'rb'))
 
@@ -609,8 +615,9 @@ if __name__ == '__main__':
     #                          )
 
     # robot experiment - special scenes
-    scene_path_name = os.path.join(r3t_root_dir, "data", "debug/real_experiment")
-    scene_file_name = 'pushaway_circle_obstacle_scene.pkl'
+    # scene_path_name = os.path.join(r3t_root_dir, "data")
+    scene_path_name = planned_path_name
+    scene_file_name = 'scene.pkl'
     scene_data = pickle.load(open(os.path.join(scene_path_name, scene_file_name), 'rb'))
     basic_info = ContactBasic(miu_list=scene_data['obstacle']['miu'],
                               geom_list=scene_data['obstacle']['geom'],
@@ -624,5 +631,5 @@ if __name__ == '__main__':
 
     # TEST ANIMATION
     # test_plot_push_planning(visualizer, vel_scale=1.0, xlim=[0.26, 0.80], ylim=[-0.09, 0.45])
-    test_plot_push_planning(visualizer, vel_scale=1.0, xlim=[0.23, 0.77], ylim=[-0.20, 0.48])
+    test_plot_push_planning(visualizer, vel_scale=1.0, xlim=[-0.25, 0.25], ylim=[-0.30, 0.30], video_path=planned_path_name)
     

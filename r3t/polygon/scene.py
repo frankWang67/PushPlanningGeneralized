@@ -93,8 +93,8 @@ def load_planning_scene_from_file(scene_pkl):
                         contact_time=raw['contact']['dt'],
                         geom_target=raw['target']['geom'])
 
-    if 'goal' in raw:
-        scene.goal_poly=raw['goal']
+    if 'goal_poly' in raw:
+        scene.goal_poly=raw['goal_poly']
 
     return scene, info
 
