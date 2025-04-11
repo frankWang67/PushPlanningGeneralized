@@ -8,7 +8,7 @@ from timeit import default_timer
 from polytope_symbolic_system.common.utils import *
 from r3t.polygon.scene import *
 from r3t.common.debug import *
-
+from r3t.polygon.mujoco_sim import MujocoSimulator
 
 EXTENSION_ERROR = {
                     0: 'meaningless extension, goal point too close to parent state',
@@ -291,16 +291,24 @@ class R3T_Hybrid_Contact:
 
             # # get pushed point and velocity
             # # ----------------------------------------
-            pusher_contact_p0 = self.sys.get_contact_location(path[0], contact_face=closest_polytope.mode_string[0])
-            pusher_contact_pf = self.sys.get_contact_location(path[-1], contact_face=closest_polytope.mode_string[0])
+            contact_face = closest_polytope.mode_string[0]
+            pusher_contact_p0 = self.sys.get_contact_location(path[0], contact_face=contact_face)
+            pusher_contact_pf = self.sys.get_contact_location(path[-1], contact_face=contact_face)
             pusher_velocity = (pusher_contact_pf - pusher_contact_p0) / self.sys.reachable_set_time_step
             # # ----------------------------------------
+            # in_contact_flag, can_extend_flag, new_state_updated, state_list_updated, new_planning_scene = \
+            #     collision_check_and_contact_reconfig_v2(basic=self.contact_basic,
+            #                                             scene=nearest_node.planning_scene,
+            #                                             state_list=path,
+            #                                             p_pusher=pusher_contact_p0,
+            #                                             v_pusher=pusher_velocity)
+            simulator = MujocoSimulator(target_state=new_state_with_psic, 
+                                        info=self.contact_basic, 
+                                        scene=nearest_node.planning_scene, 
+                                        sys=self.sys,
+                                        contact_face=contact_face)
             in_contact_flag, can_extend_flag, new_state_updated, state_list_updated, new_planning_scene = \
-                collision_check_and_contact_reconfig_v2(basic=self.contact_basic,
-                                                        scene=nearest_node.planning_scene,
-                                                        state_list=path,
-                                                        p_pusher=pusher_contact_p0,
-                                                        v_pusher=pusher_velocity)
+                simulator.simulate(v_pusher=pusher_velocity, sim_time=self.sys.reachable_set_time_step)
             if in_contact_flag and can_extend_flag:
                 path = state_list_updated.copy()
             
@@ -316,18 +324,18 @@ class R3T_Hybrid_Contact:
 
             # # get pushed point and velocity
             # # ----------------------------------------
-            pusher_contact_p0 = self.sys.get_contact_location(path[0], contact_face=closest_polytope.mode_string[0])
-            pusher_contact_pf = self.sys.get_contact_location(path[-1], contact_face=closest_polytope.mode_string[0])
-            pusher_velocity = (pusher_contact_pf - pusher_contact_p0) / self.sys.reachable_set_time_step
-            # # ----------------------------------------
-            in_contact_flag, can_extend_flag, new_state_updated, new_planning_scene = \
-                collision_check_and_contact_reconfig_v2(basic=self.contact_basic,
-                                                        scene=nearest_node.planning_scene,
-                                                        state_list=path,
-                                                        p_pusher=pusher_contact_p0,
-                                                        v_pusher=pusher_velocity)
+            # pusher_contact_p0 = self.sys.get_contact_location(path[0], contact_face=closest_polytope.mode_string[0])
+            # pusher_contact_pf = self.sys.get_contact_location(path[-1], contact_face=closest_polytope.mode_string[0])
+            # pusher_velocity = (pusher_contact_pf - pusher_contact_p0) / self.sys.reachable_set_time_step
+            # # # ----------------------------------------
+            # in_contact_flag, can_extend_flag, new_state_updated, new_planning_scene = \
+            #     collision_check_and_contact_reconfig_v2(basic=self.contact_basic,
+            #                                             scene=nearest_node.planning_scene,
+            #                                             state_list=path,
+            #                                             p_pusher=pusher_contact_p0,
+            #                                             v_pusher=pusher_velocity)
             
-            pass
+            # pass
 
         # indirect collision, uncontrollable, discard without extension
         if not can_extend_flag:

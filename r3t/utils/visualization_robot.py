@@ -603,7 +603,7 @@ if __name__ == '__main__':
     from r3t.polygon.scene import *
     # WARNING: partially initialized
 
-    planned_path_name = os.path.join(r3t_root_dir, "data", "wshf", "2025_03_09_15_48")
+    planned_path_name = os.path.join(r3t_root_dir, "data", "wshf", "2025_04_12_00_32")
     planned_file_name = 'planned_path.pkl'
     planned_data = pickle.load(open(os.path.join(planned_path_name, planned_file_name), 'rb'))
 
@@ -631,5 +631,5 @@ if __name__ == '__main__':
 
     # TEST ANIMATION
     # test_plot_push_planning(visualizer, vel_scale=1.0, xlim=[0.26, 0.80], ylim=[-0.09, 0.45])
-    test_plot_push_planning(visualizer, vel_scale=1.0, xlim=[-0.25, 0.25], ylim=[-0.30, 0.30], video_path=planned_path_name)
+    test_plot_push_planning(visualizer, vel_scale=1.0, xlim=[-0.15, 0.35], ylim=[-0.30, 0.30], video_path=planned_path_name)
     

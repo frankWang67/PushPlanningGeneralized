@@ -22,12 +22,12 @@ from r3t.symbolic_system.symbolic_system_r3t import *
 
 # scene configuration
 # --------------------------------------------------
-planning_scene_path = os.path.join(r3t_root_dir, "data", "wshf", "2025_03_09_15_48")
+planning_scene_path = os.path.join(r3t_root_dir, "data", "wshf", "2025_04_12_00_32")
 planning_scene_pkl  = os.path.join(planning_scene_path, "scene.pkl")
 scene = pickle.load(open(planning_scene_pkl, 'rb'))
 # --------------------------------------------------
 
-xmin, xmax, ymin, ymax, thetamin, thetamax = -0.25, 0.25, -0.30, 0.30, -np.pi, np.pi
+xmin, xmax, ymin, ymax, thetamin, thetamax = -0.15, 0.35, -0.30, 0.30, -np.pi, np.pi
 
 search_space_dimensions = np.array([(xmin, xmax), (ymin, ymax), (thetamin, thetamax)])
 # state_space_obstacles = MultiPolygon()  # empty obstacles
