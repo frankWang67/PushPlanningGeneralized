@@ -45,7 +45,7 @@ slider_geometry = scene['target']['geom'] + [pusher_r]
 
 fric_coeff_slider_pusher = 0.1
 fric_coeff_slider_ground = 0.3
-reachable_set_time_step = 0.05
+reachable_set_time_step = 0.01
 nonlinear_dynamics_time_step = 0.01
 
 # planner_configuration

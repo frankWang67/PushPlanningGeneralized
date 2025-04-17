@@ -15,7 +15,7 @@ EXTENSION_ERROR = {
                     1: 'hash collision, goal node already explored',
                     2: 'planning failed',
                     3: 'indirect collision with other obstacles detected, or collide with static ones',
-                    4: 'change contact face duting contact',
+                    4: 'change contact face during contact',
                     5: 'success'
                   }
 class Node_Hybrid_Contact:
