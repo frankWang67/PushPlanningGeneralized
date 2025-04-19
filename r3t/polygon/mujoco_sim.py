@@ -14,6 +14,9 @@ warnings.filterwarnings("ignore",category=DeprecationWarning)
 WIDTH = 640
 HEIGHT = 480
 
+OBS_HEIGHT = 0.03
+PUSHER_HEIGHT = 0.15
+
 class MujocoSimulator:
     def __init__(self, target_state: np.ndarray, info: ContactBasic, scene: PlanningScene, sys: PushDTHybridSystem, contact_face, time_step=0.001, vis=False):
         if isinstance(target_state, list):
@@ -44,7 +47,7 @@ class MujocoSimulator:
                     </body>
 
                     <body name="pusher" mocap="true" pos="0.0 0.0 1.0">
-                        <geom type="cylinder" size="{sys.slider_geom[2]} 0.15" rgba="1 0 0 1"/>
+                        <geom type="cylinder" size="{sys.slider_geom[2]} {PUSHER_HEIGHT}" rgba="1 0 0 1"/>
                     </body>
                 </worldbody>
             </mujoco>
@@ -58,12 +61,12 @@ class MujocoSimulator:
             quat_wxyz = np.array([quat_xyzw[3], quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]])
             obs_body = self.spec.worldbody.add_body(
                 name=f'obs{i+1}',
-                pos=[scene.states[i][0], scene.states[i][1], 0.025],
+                pos=[scene.states[i][0], scene.states[i][1], OBS_HEIGHT / 2.0],
                 quat=quat_wxyz,
             )
             obs_geom = obs_body.add_geom(
                 type=mj.mjtGeom.mjGEOM_BOX,
-                size=[info.geom_list[i][0] / 2.0, info.geom_list[i][1] / 2.0, 0.025],
+                size=[info.geom_list[i][0] / 2.0, info.geom_list[i][1] / 2.0, OBS_HEIGHT / 2.0],
                 rgba=[0, 1, 0, 1],
             )
             obs_geom.solimp[3], obs_geom.solimp[4] = 0.1, 6
@@ -78,12 +81,12 @@ class MujocoSimulator:
         quat_wxyz = np.array([quat_xyzw[3], quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]])
         slider_body = self.spec.worldbody.add_body(
             name='slider',
-            pos=[target_state[0], target_state[1], 0.025],
+            pos=[target_state[0], target_state[1], OBS_HEIGHT / 2.0],
             quat=quat_wxyz,
         )
         slider_geom = slider_body.add_geom(
             type=mj.mjtGeom.mjGEOM_BOX,
-            size=[info.geom_target[0] / 2.0, info.geom_target[1] / 2.0, 0.025],
+            size=[info.geom_target[0] / 2.0, info.geom_target[1] / 2.0, OBS_HEIGHT / 2.0],
             rgba=[0, 0, 1, 1],
         )
         slider_geom.solimp[3], slider_geom.solimp[4] = 0.1, 6
@@ -96,7 +99,7 @@ class MujocoSimulator:
         # Add pusher
         pusher_pos = self.sys.get_pusher_location(target_state, contact_face)
         pusher_body = self.spec.find_body('pusher')
-        pusher_body.pos = np.concatenate([pusher_pos, [0.1]])
+        pusher_body.pos = np.concatenate([pusher_pos, [PUSHER_HEIGHT + 0.01]])
 
         self.model = self.spec.compile()
         self.data = mj.MjData(self.model)
