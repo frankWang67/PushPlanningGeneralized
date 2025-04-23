@@ -170,8 +170,15 @@ class R3T_Hybrid_Contact:
         scene, basic_info = load_planning_scene_from_file(planning_scene_pkl)
         self.root_node.set_planning_scene(scene)
         # self.debugger.add_node_data(self.root_node)
-        basic_info.A_target = self.sys.lsurf_A(basic_info.geom_target+[0.01]).toarray()
+        # basic_info.A_target = self.sys.lsurf_A(basic_info.geom_target+[0.01]).toarray()
         self.contact_basic = basic_info
+
+        self.simulator = MujocoSimulator(info=self.contact_basic, 
+                                         scene=scene, 
+                                         sys=self.sys,
+                                         contact_face='back',
+                                         psic=self.sys.psic_each_face_center['back'],
+                                         vis=False)
 
         ## compute_reachable_set
         # (state with psic, input) --> the PolytopeReachableSetTree object
@@ -289,26 +296,21 @@ class R3T_Hybrid_Contact:
             #                                         state_list=path)
             # new_state_updated = new_state.copy()
 
-            # # get pushed point and velocity
-            # # ----------------------------------------
+            # get pushed point and velocity
+            # ----------------------------------------
             contact_face = closest_polytope.mode_string[0]
             pusher_contact_p0 = self.sys.get_contact_location(path[0], contact_face=contact_face)
             pusher_contact_pf = self.sys.get_contact_location(path[-1], contact_face=contact_face)
             pusher_velocity = (pusher_contact_pf - pusher_contact_p0) / self.sys.reachable_set_time_step
             # # ----------------------------------------
-            # in_contact_flag, can_extend_flag, new_state_updated, state_list_updated, new_planning_scene = \
-            #     collision_check_and_contact_reconfig_v2(basic=self.contact_basic,
-            #                                             scene=nearest_node.planning_scene,
-            #                                             state_list=path,
-            #                                             p_pusher=pusher_contact_p0,
-            #                                             v_pusher=pusher_velocity)
-            simulator = MujocoSimulator(target_state=new_state_with_psic, 
-                                        info=self.contact_basic, 
-                                        scene=nearest_node.planning_scene, 
-                                        sys=self.sys,
-                                        contact_face=contact_face)
+            if closest_polytope.mode_consistent:
+                psic = nearest_node.reachable_set.parent_state[-1]
+            else:
+                psic = self.sys.psic_each_face_center[contact_face]
+            self.simulator.reset_scene(scene=nearest_node.planning_scene, contact_face=contact_face, psic=psic)
             in_contact_flag, can_extend_flag, new_state_updated, state_list_updated, new_planning_scene = \
-                simulator.simulate(v_pusher=pusher_velocity, sim_time=self.sys.reachable_set_time_step)
+                self.simulator.simulate(v_pusher=pusher_velocity, sim_time=self.sys.reachable_set_time_step)
+
             if in_contact_flag and can_extend_flag:
                 path = state_list_updated.copy()
             
@@ -412,7 +414,7 @@ class R3T_Hybrid_Contact:
 
             # skip collision check, update planning scene
             goal_planning_scene = copy.deepcopy(goal_node.parent.planning_scene)
-            goal_planning_scene.target_polygon = gen_polygon(goal_node.state[:3], self.contact_basic.geom_target, 'box')
+            goal_planning_scene.target_polygon = gen_polygon(goal_node.state[:3], self.contact_basic.bbox_target)
             goal_node.set_planning_scene(goal_planning_scene)
 
             # assign the goal node
@@ -473,7 +475,7 @@ class R3T_Hybrid_Contact:
                                                                                            slider_in_contact=nearest_node.planning_scene.in_contact)
                     if discard:
                         if self.print_flag:
-                            print('R3T_Hybrid: extension from {0} to {1} failed!'.format(nearest_node.state[:-1], new_state))
+                            print('R3T_Hybrid: extension from {0} to {1} failed due to discard!'.format(nearest_node.state[:-1], new_state))
                         continue
                     self.time_cost['nn_search'].append(default_timer()-T_NN_SEARCH_START)
 
@@ -494,7 +496,7 @@ class R3T_Hybrid_Contact:
                     new_state_id = hash(str(new_node.state[:-1]))  # without psic
                     if new_state_id in self.state_to_node_map:
                         if self.print_flag:
-                            print('R3T_Hybrid: extension from {0} to {1} failed!'.format(nearest_node.state[:-1], new_state))
+                            print('R3T_Hybrid: extension from {0} to {1} failed due to duplication!'.format(nearest_node.state[:-1], new_state))
                         continue
                     # self.time_cost['extend'].append(default_timer()-T_EXTEND_START)
 
@@ -566,7 +568,7 @@ class R3T_Hybrid_Contact:
 
                 # skip collision check, update planning scene
                 goal_planning_scene = copy.deepcopy(goal_node.parent.planning_scene)
-                goal_planning_scene.target_polygon = gen_polygon(goal_node.state[:3], self.contact_basic.geom_target, 'box')
+                goal_planning_scene.target_polygon = gen_polygon(goal_node.state[:3], self.contact_basic.bbox_target)
                 goal_node.set_planning_scene(goal_planning_scene)
 
                 # assign goal node

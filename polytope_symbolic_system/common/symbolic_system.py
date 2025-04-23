@@ -10,6 +10,7 @@ from pypolycontain.lib.objects import H_polytope
 from pypolycontain.lib.operations import *
 from polytope_symbolic_system.common.intfunc import rect_cs
 from polytope_symbolic_system.common.utils import *
+from polytope_symbolic_system.common.bspline import bspline_curve
 
 
 def extract_variable_value_from_env(symbolic_var, env):
@@ -422,8 +423,8 @@ class DTHybridSystem:
 
 
 class PushDTHybridSystem:
-    def __init__(self, f_lim=0.3, dpsic_lim=3.0, unilateral_sliding_region=0.005, slider_geom=[0.07, 0.12, 0.01],
-                       miu_slider_pusher=0.3, miu_slider_ground=0.2, quad_cost_input=[0., 0., 0.],
+    def __init__(self, curve: bspline_curve, f_lim=0.3, dpsic_lim=3.0, unilateral_sliding_region=0.005, slider_bbox=[-0.035, -0.06, 0.035, 0.06], pusher_r = 0.0075,
+                       miu_slider_pusher=0.3, miu_slider_ground=0.2, quad_cost_input=[0.1, 0.1, 0.1],
                        reachable_set_time_step=0.05, nldynamics_time_step=0.01) -> None:
         """
         The PushDTHybridSystem, to do forward simulation, compute reachable polytopes of the pusher-slider system
@@ -436,15 +437,18 @@ class PushDTHybridSystem:
         :param reachable_set_time_step: time step when computing reachable set
         :param nldynamics_time_step: time step when doing forward simulation
         """
+        self.curve = curve
+
         self.f_lim = f_lim  # default: 0.3
         self.dpsic_lim = dpsic_lim  # default: 3.0
         self.unilateral_sliding_region = unilateral_sliding_region  # default: 0.005
-        self.slider_geom = slider_geom  # default: [0.07, 0.12, 0.01]
+        self.slider_bbox = slider_bbox  # default: [-0.035, -0.06, 0.035, 0.06]
+        self.pusher_r = pusher_r  # default: 0.0075
 
         self.miu_slider_pusher = miu_slider_pusher  # default: 0.3
         self.miu_slider_ground = miu_slider_ground  # default: 0.2
 
-        self.quad_cost_input = quad_cost_input  # default: [0., 0., 0.]
+        self.quad_cost_input = quad_cost_input  # default: [0.1, 0.1, 0.1]
 
         self.reachable_set_time_step = reachable_set_time_step  # default: 0.05
         self.nldynamics_time_step = nldynamics_time_step  # default: 0.01
@@ -452,10 +456,15 @@ class PushDTHybridSystem:
         self.contact_face_list = ['front', 'back', 'left', 'right']
         # self.contact_mode_list = ['sticking', 'sliding_left', 'sliding_right']  # not necessary to explicitly use sliding
         self.contact_mode_list = ['sticking']
-        self.psic_each_face_center = {'front': 0.,
-                                      'back': np.pi,
-                                      'left': 0.5*np.pi,
-                                      'right': -0.5*np.pi}
+        # self.psic_each_face_center = {'front': 0.,
+        #                               'back': np.pi,
+        #                               'left': 0.5*np.pi,
+        #                               'right': -0.5*np.pi}
+        x_min, y_min, x_max, y_max = slider_bbox
+        self.psic_each_face_center = {'front': np.arctan2(0.5*(y_min+y_max), x_max),
+                                      'back':  np.arctan2(0.5*(y_min+y_max), x_min),
+                                      'left':  np.arctan2(y_max, 0.5*(x_min+x_max)),
+                                      'right': np.arctan2(y_min, 0.5*(x_min+x_max))}
         self.u_domain_polytope_keypoint = {'sticking': np.array([[0., 0., 0.],
                                                                  [self.f_lim, self.miu_slider_pusher*self.f_lim, 0.],
                                                                  [self.f_lim, -self.miu_slider_pusher*self.f_lim, 0.]]),
@@ -477,209 +486,99 @@ class PushDTHybridSystem:
 
         #  -------------------------------------------------------------------
 
-        __x = cs.SX.sym('x')
-        __y = cs.SX.sym('y')
-        __theta = cs.SX.sym('theta')
-        __psic = cs.SX.sym('psic')
+        __x = cs.MX.sym('x')
+        __y = cs.MX.sym('y')
+        __theta = cs.MX.sym('theta')
+        __psic = cs.MX.sym('psic')
         self.x = cs.veccat(__x, __y, __theta, __psic)
         self.dim_x = 4
 
-        __x_bar = cs.SX.sym('x_bar')
-        __y_bar = cs.SX.sym('y_bar')
-        __theta_bar = cs.SX.sym('theta_bar')
-        __psic_bar =cs.SX.sym('psic_bar')
+        __x_bar = cs.MX.sym('x_bar')
+        __y_bar = cs.MX.sym('y_bar')
+        __theta_bar = cs.MX.sym('theta_bar')
+        __psic_bar =cs.MX.sym('psic_bar')
         self.x_bar = cs.veccat(__x_bar, __y_bar, __theta_bar, __psic_bar)
 
-        __fn = cs.SX.sym('fn')
-        __ft = cs.SX.sym('ft')
-        __dpsic = cs.SX.sym('dpsic')
+        __fn = cs.MX.sym('fn')
+        __ft = cs.MX.sym('ft')
+        __dpsic = cs.MX.sym('dpsic')
         __f_ctact = cs.veccat(__fn, __ft)
         self.u = cs.veccat(__fn, __ft, __dpsic)
         self.dim_u = 3
 
-        __fn_bar = cs.SX.sym('fn_bar')
-        __ft_bar = cs.SX.sym('ft_bar')
-        __dpsic_bar = cs.SX.sym('dpsic_bar')
+        __fn_bar = cs.MX.sym('fn_bar')
+        __ft_bar = cs.MX.sym('ft_bar')
+        __dpsic_bar = cs.MX.sym('dpsic_bar')
         self.u_bar = cs.veccat(__fn_bar, __ft_bar, __dpsic_bar)
 
-        __xl = cs.SX.sym('xl')
-        __yl = cs.SX.sym('yl')
-        __rl = cs.SX.sym('rl')
-        self.beta = cs.veccat(__xl, __yl, __rl)
+        __rl = cs.MX.sym('rl')
+        self.rl = __rl
         
-        __Area = __xl*__yl
-        __int_Area = rect_cs(__xl, __yl)
-        __c = __int_Area/__Area
-        __A = cs.SX.sym('__A', cs.Sparsity.diag(3))
-        __A[0,0] = __A[1,1] = 1.; __A[2,2] = 1./(__c**2)
+        __A = cs.MX(self.curve.lim_surf_A)
 
         #  -------------------------------------------------------------------
 
-        __norm = {'front': cs.DM([-1., 0.]),
-                  'back':  cs.DM([1., 0.]),
-                  'left':  cs.DM([0., 1.]),
-                  'right': cs.DM([0., -1.])}
-        __tangent = {'front': cs.DM([0., -1.]),
-                     'back': cs.DM([0., 1.]),
-                     'left': cs.DM([-1., 0.]),
-                     'right': cs.DM([1., 0.])}
+        __norm = self.curve.normal_func(self.curve.psic_to_t(__psic))
+        __tangent = self.curve.tangent_func(self.curve.psic_to_t(__psic))
 
-        __xc = cs.SX.sym('xc')
-        __yc = cs.SX.sym('yc')
-        __Jc = cs.SX(2,3)
+        __xc = cs.MX.sym('xc')
+        __yc = cs.MX.sym('yc')
+        __Jc = cs.MX(2,3)
         __Jc[0,0] = 1; __Jc[1,1] = 1; __Jc[0,2] = -__yc; __Jc[1,2] = __xc
         Jc = cs.Function('contact_jacobian', [__xc, __yc], [__Jc])
 
-        __x_ctact = {'front':  0.5*__xl,
-                     'back':  -0.5*__xl,
-                     'left':   0.5*__yl/cs.tan(__psic),
-                     'right': -0.5*__yl/cs.tan(__psic)}
-        __y_ctact = {'front':  0.5*__xl*cs.tan(__psic),
-                     'back':  -0.5*__xl*cs.tan(__psic),
-                     'left':   0.5*__yl,
-                     'right': -0.5*__yl}
-        __Jc_ctact = {'front': Jc(__x_ctact['front'], __y_ctact['front']),
-                      'back':  Jc(__x_ctact['back'], __y_ctact['back']),
-                      'left':  Jc(__x_ctact['left'], __y_ctact['left']),
-                      'right': Jc(__x_ctact['right'], __y_ctact['right'])}
+        ctact_pt = self.curve.curve_func(self.curve.psic_to_t(__psic))
+        __x_ctact = ctact_pt[0]
+        __y_ctact = ctact_pt[1]
+        __Jc_ctact = Jc(__x_ctact, __y_ctact)
 
         __ctheta = cs.cos(__theta)
         __stheta = cs.sin(__theta)
-        __R = cs.SX(3, 3)
+        __R = cs.MX.zeros(3, 3)
         __R[0,0] = __ctheta; __R[0,1] = -__stheta; __R[1,0] = __stheta; __R[1,1] = __ctheta; __R[2,2] = 1.0
 
         #  -------------------------------------------------------------------
         # auxiliary
-        self.lsurf_A = cs.Function('A', [self.beta], [__A])
-        self.RxA = cs.Function('RxA', [self.x, self.beta], [cs.mtimes(__R, __A)])
+        self.lsurf_A = __A
+        self.RxA = cs.Function('RxA', [self.x], [cs.mtimes(__R, __A)])
         # rechable set dynamics (dt = reachable_set_time_step)
-        self.f_rcbset = {'front': self.x + self.reachable_set_time_step * cs.vertcat(
-                            cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact['front'].T, 
-                            cs.vertcat(cs.mtimes(__norm['front'].T, __f_ctact), cs.mtimes(__tangent['front'].T, __f_ctact))))),
-                            __dpsic),
-                         'back':  self.x + self.reachable_set_time_step * cs.vertcat(
-                            cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact['back'].T,
-                            cs.vertcat(cs.mtimes(__norm['back'].T, __f_ctact), cs.mtimes(__tangent['back'].T, __f_ctact))))),
-                            __dpsic),
-                         'left':  self.x + self.reachable_set_time_step * cs.vertcat(
-                            cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact['left'].T,
-                            cs.vertcat(cs.mtimes(__norm['left'].T, __f_ctact), cs.mtimes(__tangent['left'].T, __f_ctact))))),
-                            __dpsic),
-                         'right': self.x + self.reachable_set_time_step * cs.vertcat(
-                            cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact['right'].T,
-                            cs.vertcat(cs.mtimes(__norm['right'].T, __f_ctact), cs.mtimes(__tangent['right'].T, __f_ctact))))),
+        self.f_rcbset = self.x + self.reachable_set_time_step * cs.vertcat(
+                            cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact.T, 
+                            cs.vertcat(cs.mtimes(__norm.T, __f_ctact), cs.mtimes(__tangent.T, __f_ctact))))),
                             __dpsic)
-        }
-
-        ## for debug
-        # self.jacobian_u_test = {'front': self.reachable_set_time_step * 
-        #                     cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact['front'].T, 
-        #                     cs.vertcat(__norm['front'].T, __tangent['front'].T)))),
-        #                  'back':  self.reachable_set_time_step * 
-        #                     cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact['back'].T,
-        #                     cs.vertcat(__norm['back'].T, __tangent['back'].T)))),
-        #                  'left':  self.reachable_set_time_step * 
-        #                     cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact['left'].T,
-        #                     cs.vertcat(__norm['left'].T, __tangent['left'].T)))),
-        #                  'right': self.reachable_set_time_step * 
-        #                     cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact['right'].T,
-        #                     cs.vertcat(__norm['right'].T, __tangent['right'].T))))
-        # }
-
-        # R_func = cs.Function('R', [self.x], [__R])
-        # A_func  =cs.Function('A', [self.beta], [__A])
-        # Jc_ctact_func = cs.Function('Jc', [self.x], [cs.mtimes(__Jc_ctact['front'].T, cs.vertcat(__norm['front'].T, __tangent['front'].T))])
-        # A_Jc_ctact_func = cs.Function('Jc', [self.x, self.beta], [cs.mtimes(__A, cs.mtimes(__Jc_ctact['front'].T, cs.vertcat(__norm['front'].T, __tangent['front'].T)))])
-
-        # self.jacobian_u_test_func = {
-        #                  'front': cs.Function('f_jacobi_u_front', [self.x, self.u, self.beta], [self.jacobian_u_test['front']]),
-        #                  'back':  cs.Function('f_jacobi_u_back', [self.x, self.u, self.beta], [self.jacobian_u_test['back']]),
-        #                  'left':  cs.Function('f_jacobi_u_left', [self.x, self.u, self.beta], [self.jacobian_u_test['left']]),
-        #                  'right': cs.Function('f_jacobi_u_right', [self.x, self.u, self.beta], [self.jacobian_u_test['right']])
-        # }
-        # import pdb; pdb.set_trace()
 
         # differentiable function
-        self.f_rcbset_func = {
-                        'front': cs.Function('f_rcbset_front', [self.x, self.u, self.beta], [self.f_rcbset['front']]),
-                        'back':  cs.Function('f_rcbset_back', [self.x, self.u, self.beta], [self.f_rcbset['back']]),
-                        'left':  cs.Function('f_rcbset_left', [self.x, self.u, self.beta], [self.f_rcbset['left']]),
-                        'right': cs.Function('f_rcbset_right', [self.x, self.u, self.beta], [self.f_rcbset['right']])
-        }
+        self.f_rcbset_func = cs.Function('f_rcbset', [self.x, self.u], [self.f_rcbset])
 
         # non-linear dynamics (dt = nldynamics_time_step)
-        self.f_nldyn = {'front': self.x + self.nldynamics_time_step * cs.vertcat(+
-                            cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact['front'].T, 
-                            cs.vertcat(cs.mtimes(__norm['front'].T, __f_ctact), cs.mtimes(__tangent['front'].T, __f_ctact))))),
-                            __dpsic),
-                         'back':  self.x + self.nldynamics_time_step * cs.vertcat(
-                            cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact['back'].T,
-                            cs.vertcat(cs.mtimes(__norm['back'].T, __f_ctact), cs.mtimes(__tangent['back'].T, __f_ctact))))),
-                            __dpsic),
-                         'left':  self.x + self.nldynamics_time_step * cs.vertcat(
-                            cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact['left'].T,
-                            cs.vertcat(cs.mtimes(__norm['left'].T, __f_ctact), cs.mtimes(__tangent['left'].T, __f_ctact))))),
-                            __dpsic),
-                         'right': self.x + self.nldynamics_time_step * cs.vertcat(
-                            cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact['right'].T,
-                            cs.vertcat(cs.mtimes(__norm['right'].T, __f_ctact), cs.mtimes(__tangent['right'].T, __f_ctact))))),
+        self.f_nldyn = self.x + self.nldynamics_time_step * cs.vertcat(
+                            cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact.T, 
+                            cs.vertcat(cs.mtimes(__norm.T, __f_ctact), cs.mtimes(__tangent.T, __f_ctact))))),
                             __dpsic)
-        }
 
         # differentiable function
-        self.f_nldyn_func = {
-                        'front': cs.Function('f_nldyn_front', [self.x, self.u, self.beta], [self.f_nldyn['front']]),
-                        'back':  cs.Function('f_nldyn_back', [self.x, self.u, self.beta], [self.f_nldyn['back']]),
-                        'left':  cs.Function('f_nldyn_left', [self.x, self.u, self.beta], [self.f_nldyn['left']]),
-                        'right': cs.Function('f_nldyn_right', [self.x, self.u, self.beta], [self.f_nldyn['right']])
-        }
+        self.f_nldyn_func = cs.Function('f_nldyn', [self.x, self.u], [self.f_nldyn])
 
         # symbolic for LQR
-        self.xdot = {'front': cs.vertcat(cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact['front'].T, 
-                       cs.vertcat(cs.mtimes(__norm['front'].T, __f_ctact), cs.mtimes(__tangent['front'].T, __f_ctact))))),
-                       __dpsic),
-                     'back':  cs.vertcat(cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact['back'].T,
-                       cs.vertcat(cs.mtimes(__norm['back'].T, __f_ctact), cs.mtimes(__tangent['back'].T, __f_ctact))))),
-                       __dpsic),
-                     'left':  cs.vertcat(cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact['left'].T,
-                       cs.vertcat(cs.mtimes(__norm['left'].T, __f_ctact), cs.mtimes(__tangent['left'].T, __f_ctact))))),
-                       __dpsic),
-                     'right': cs.vertcat(cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact['right'].T,
-                       cs.vertcat(cs.mtimes(__norm['right'].T, __f_ctact), cs.mtimes(__tangent['right'].T, __f_ctact))))),
+        self.xdot = cs.vertcat(cs.mtimes(__R, cs.mtimes(__A, cs.mtimes(__Jc_ctact.T, 
+                       cs.vertcat(cs.mtimes(__norm.T, __f_ctact), cs.mtimes(__tangent.T, __f_ctact))))),
                        __dpsic)
-        }
 
         # differentiable function
-        self.xdot_func = {
-                        'front': cs.Function('xdot_front', [self.x, self.u, self.beta], [self.xdot['front']]),
-                        'back':  cs.Function('xdot_back', [self.x, self.u, self.beta], [self.xdot['back']]),
-                        'left':  cs.Function('xdot_left', [self.x, self.u, self.beta], [self.xdot['left']]),
-                        'right': cs.Function('xdot_right', [self.x, self.u, self.beta], [self.xdot['right']])
-        }
+        self.xdot_func = cs.Function('xdot', [self.x, self.u], [self.xdot])
 
         #  -------------------------------------------------------------------
         # matrices for AH-polytope construction
-        self.A_mat_func = {}
-        self.B_mat_func = {}
-        self.c_mat_func = {}
-        for contact_face in self.contact_face_list:
-            A_mat_temp = cs.jacobian(self.f_rcbset[contact_face], self.x)
-            B_mat_temp = cs.jacobian(self.f_rcbset[contact_face], self.u)
-            A_mat_temp_func = cs.Function('A_mat_temp_func', [self.x, self.u, self.beta], [A_mat_temp])
-            B_mat_temp_func = cs.Function('B_mat_temp_func', [self.x, self.u, self.beta], [B_mat_temp])
+        A_mat = cs.jacobian(self.f_rcbset, self.x)
+        B_mat = cs.jacobian(self.f_rcbset, self.u)
+        self.A_mat_func = cs.Function('A_mat_func', [self.x, self.u], [A_mat])
+        self.B_mat_func = cs.Function('B_mat_func', [self.x, self.u], [B_mat])
 
-            c_mat_temp = self.f_rcbset_func[contact_face](self.x_bar, self.u_bar, self.beta) \
-                            - cs.mtimes(A_mat_temp_func(self.x_bar, self.u_bar, self.beta), self.x_bar) \
-                            - cs.mtimes(B_mat_temp_func(self.x_bar, self.u_bar, self.beta), self.u_bar)
-            
-            c_mat_temp_func = cs.Function('c_mat_temp_func', [self.x_bar, self.u_bar, self.beta], [c_mat_temp])
-
-            self.A_mat_func[contact_face] = cs.Function('A_mat_func', [self.x_bar, self.u_bar, self.beta],
-                                                        [A_mat_temp_func(self.x_bar, self.u_bar, self.beta)])
-            self.B_mat_func[contact_face] = cs.Function('B_mat_func', [self.x_bar, self.u_bar, self.beta],
-                                                        [B_mat_temp_func(self.x_bar, self.u_bar, self.beta)])
-            self.c_mat_func[contact_face] = cs.Function('c_mat_func', [self.x_bar, self.u_bar, self.beta],
-                                                        [c_mat_temp_func(self.x_bar, self.u_bar, self.beta)])
+        c_mat = self.f_rcbset_func(self.x_bar, self.u_bar) \
+                        - cs.mtimes(self.A_mat_func(self.x_bar, self.u_bar), self.x_bar) \
+                        - cs.mtimes(self.B_mat_func(self.x_bar, self.u_bar), self.u_bar)
+        
+        self.c_mat_func = cs.Function('c_mat_func', [self.x_bar, self.u_bar], [c_mat])
 
         self.E_mat = {'sticking': cs.DM([[-self.miu_slider_pusher, 1., 0.],
                                          [-self.miu_slider_pusher, -1., 0.],
@@ -735,13 +634,10 @@ class PushDTHybridSystem:
 
         #  -------------------------------------------------------------------
         # matrices for LQR
-        self.A_mat_LQR_func = {}
-        self.B_mat_LQR_func = {}
-        for contact_face in self.contact_face_list:
-            A_mat_LQR_temp = cs.jacobian(self.xdot[contact_face], self.x)
-            B_mat_LQR_temp = cs.jacobian(self.xdot[contact_face], self.u)
-            self.A_mat_LQR_func[contact_face] = cs.Function('A_mat_LQR_func', [self.x, self.u, self.beta], [A_mat_LQR_temp])
-            self.B_mat_LQR_func[contact_face] = cs.Function('B_mat_LQR_func', [self.x, self.u, self.beta], [B_mat_LQR_temp])
+        A_mat_LQR = cs.jacobian(self.xdot, self.x)
+        B_mat_LQR = cs.jacobian(self.xdot, self.u)
+        self.A_mat_LQR_func = cs.Function('A_mat_LQR_func', [self.x, self.u], [A_mat_LQR])
+        self.B_mat_LQR_func = cs.Function('B_mat_LQR_func', [self.x, self.u], [B_mat_LQR])
 
     def forward_step(self, u=None, linearize=False, modify_system=None, step_size=1e-2, return_as_env=None,
                         return_mode=None, starting_state=None, mode_string=None):
@@ -796,8 +692,7 @@ class PushDTHybridSystem:
         nominal_state = starting_state.copy()
         nominal_state[-1] = current_psic
 
-        dynamics = self.f_nldyn_func[contact_face]
-        next_state = dynamics(nominal_state, nominal_input, self.slider_geom).toarray()
+        next_state = self.f_nldyn_func(nominal_state, nominal_input).toarray()
 
         return next_state
 
@@ -823,8 +718,11 @@ class PushDTHybridSystem:
         # get the contact face
         current_contact_face = self._get_contact_face_from_state(state)
 
-        # get the unilateral sliding flag (True/False), the prohibited sliding mode
-        unilateral_sliding_flag, prohibited_sliding_mode = self._get_unilateral_sliding_flag_from_state(state, current_contact_face)
+        # # get the unilateral sliding flag (True/False), the prohibited sliding mode
+        # unilateral_sliding_flag, prohibited_sliding_mode = self._get_unilateral_sliding_flag_from_state(state, current_contact_face)
+        # --- BY WSHF ---
+        # We don't need it now
+        unilateral_sliding_flag, prohibited_sliding_mode = False, None
         
         # get the AH_polytope expression of all legal reachable sets
         for mode_index, mode_string in enumerate(self.dynamics_mode_list):
@@ -850,9 +748,9 @@ class PushDTHybridSystem:
             nominal_state[-1] = start_psic
 
             # get the matrices (exclude the last row of psic, which is unnecessary when computing reachable set)
-            A_mat = self.A_mat_func[contact_face](nominal_state, nominal_input, self.slider_geom)[:-1, :]
-            B_mat = self.B_mat_func[contact_face](nominal_state, nominal_input, self.slider_geom)[:-1, :]
-            c_mat = self.c_mat_func[contact_face](nominal_state, nominal_input, self.slider_geom)[:-1, :]
+            A_mat = self.A_mat_func(nominal_state, nominal_input)[:-1, :]
+            B_mat = self.B_mat_func(nominal_state, nominal_input)[:-1, :]
+            c_mat = self.c_mat_func(nominal_state, nominal_input)[:-1, :]
 
             E_mat = self.E_mat[contact_mode]
             Xi_mat = self.Xi_mat[contact_mode]
@@ -908,8 +806,11 @@ class PushDTHybridSystem:
         # get the contact face
         current_contact_face = self._get_contact_face_from_state(state)
 
-        # get the unilateral sliding flag (True/False), the prohibited sliding mode
-        unilateral_sliding_flag, prohibited_sliding_mode = self._get_unilateral_sliding_flag_from_state(state, current_contact_face)
+        # # get the unilateral sliding flag (True/False), the prohibited sliding mode
+        # unilateral_sliding_flag, prohibited_sliding_mode = self._get_unilateral_sliding_flag_from_state(state, current_contact_face)
+        # --- BY WSHF ---
+        # We don't need it now
+        unilateral_sliding_flag, prohibited_sliding_mode = False, None
         
         # get the AH_polytope expression of all legal reachable sets
         for mode_index, mode_string in enumerate(self.dynamics_mode_list):
@@ -944,9 +845,9 @@ class PushDTHybridSystem:
             nominal_state_psic_min[-1] = psic_min
 
             # get the matrices (exclude the last row of psic, which is unnecessary when computing reachable set)
-            A_mat_psic_min = self.A_mat_func[contact_face](nominal_state_psic_min, nominal_input, self.slider_geom)[:-1, :]
-            B_mat_psic_min = self.B_mat_func[contact_face](nominal_state_psic_min, nominal_input, self.slider_geom)[:-1, :]
-            c_mat_psic_min = self.c_mat_func[contact_face](nominal_state_psic_min, nominal_input, self.slider_geom)[:-1, :]
+            A_mat_psic_min = self.A_mat_func(nominal_state_psic_min, nominal_input)[:-1, :]
+            B_mat_psic_min = self.B_mat_func(nominal_state_psic_min, nominal_input)[:-1, :]
+            c_mat_psic_min = self.c_mat_func(nominal_state_psic_min, nominal_input)[:-1, :]
 
             # construct the reachable set as AH_polytopes
             AH_polytope_state_psic_min = AH_polytope(T=B_mat_psic_min,
@@ -965,9 +866,9 @@ class PushDTHybridSystem:
             nominal_state_psic_max[-1] = psic_max
 
             # get the matrices (exclude the last row of psic, which is unnecessary when computing reachable set)
-            A_mat_psic_max = self.A_mat_func[contact_face](nominal_state_psic_max, nominal_input, self.slider_geom)[:-1, :]
-            B_mat_psic_max = self.B_mat_func[contact_face](nominal_state_psic_max, nominal_input, self.slider_geom)[:-1, :]
-            c_mat_psic_max = self.c_mat_func[contact_face](nominal_state_psic_max, nominal_input, self.slider_geom)[:-1, :]
+            A_mat_psic_max = self.A_mat_func(nominal_state_psic_max, nominal_input)[:-1, :]
+            B_mat_psic_max = self.B_mat_func(nominal_state_psic_max, nominal_input)[:-1, :]
+            c_mat_psic_max = self.c_mat_func(nominal_state_psic_max, nominal_input)[:-1, :]
 
             # construct the reachable set as AH_polytopes
             AH_polytope_state_psic_max = AH_polytope(T=B_mat_psic_max,
@@ -1030,9 +931,9 @@ class PushDTHybridSystem:
         nominal_state[-1] = current_psic
 
         # exclude the last row of psic, which is unnecessary when computing reachable set
-        return DiscreteLinearDynamics(A=self.A_mat_func[contact_face](nominal_state, nominal_input, self.slider_geom)[:-1, :].toarray(),
-                                      B=self.B_mat_func[contact_face](nominal_state, nominal_input, self.slider_geom)[:-1, :].toarray(),
-                                      c=self.c_mat_func[contact_face](nominal_state, nominal_input, self.slider_geom)[:-1, :].toarray(),
+        return DiscreteLinearDynamics(A=self.A_mat_func(nominal_state, nominal_input)[:-1, :].toarray(),
+                                      B=self.B_mat_func(nominal_state, nominal_input)[:-1, :].toarray(),
+                                      c=self.c_mat_func(nominal_state, nominal_input)[:-1, :].toarray(),
                                       E=self.E_mat[contact_mode].toarray(),
                                       Xi=self.Xi_mat[contact_mode].toarray(),
                                       x_bar=nominal_state,
@@ -1048,10 +949,11 @@ class PushDTHybridSystem:
         :return: approximate_input
         """
         # calculate desired dpsic
+        current_psic = nominal_x[-1]
         goal_psic = self._calculate_desired_psic_from_state_transition(from_state=nominal_x[:-1],
                                                                        to_state=goal_state,
+                                                                       psic0=current_psic,
                                                                        contact_face=mode_string[0])
-        current_psic = nominal_x[-1]
         dpsic = angle_diff(current_psic, goal_psic) / self.reachable_set_time_step
 
         # calculate desired force
@@ -1090,8 +992,8 @@ class PushDTHybridSystem:
         nominal_state = start_state.copy()
         nominal_input = np.zeros(self.dim_u)
         # nominal_input = self.calculate_input(goal_state=end_state[:-1], nominal_x=nominal_state, nominal_u=np.zeros(self.dim_u), mode_string=('left', 'sticking'))
-        A = self.A_mat_LQR_func[contact_face](nominal_state, nominal_input, self.slider_geom).toarray()
-        B = self.B_mat_LQR_func[contact_face](nominal_state, nominal_input, self.slider_geom).toarray()
+        A = self.A_mat_LQR_func(nominal_state, nominal_input).toarray()
+        B = self.B_mat_LQR_func(nominal_state, nominal_input).toarray()
         R = np.diag(self.quad_cost_input)
         R_inv = np.linalg.pinv(R)
         M = matrix_mult([B,R_inv,B.T])
@@ -1151,13 +1053,13 @@ class PushDTHybridSystem:
             [meters per second, radians per second]
         """
         if Q is None:
-            Q = np.append(np.ones(self.dim_x-1), 0.)
+            Q = np.diag(np.append(np.ones(self.dim_x-1), 0.))
         if R is None:
             R = np.diag(self.quad_cost_input)
         if A is None:
             A = np.eye(self.dim_x)
         if B is None:
-            B = dt*self.B_mat_LQR_func[contact_face](actual_state_x, np.zeros(self.dim_u), self.slider_geom).toarray()
+            B = dt*self.B_mat_LQR_func(actual_state_x, np.zeros(self.dim_u)).toarray()
 
         # We want the system to stabilize at desired_state_xf.
         x_error = actual_state_x - desired_state_xf
@@ -1216,7 +1118,7 @@ class PushDTHybridSystem:
                                       mode_string=mode_string)
             # collision check
             if Z_obs_list is not None:
-                collision_flag = intersects(Z_obs_list, gen_polygon(state[:-1], self.slider_geom[:2]))
+                collision_flag = intersects(Z_obs_list, gen_polygon(state[:-1], self.slider_bbox))
                 if collision_flag:
                     # FIXME: closest point is unreachable, should return parent_state, state or closest_point?
                     return False, None, None
@@ -1236,26 +1138,12 @@ class PushDTHybridSystem:
         :param contact_face: the contact face
         """
         psic = state[3]
-        xl, yl, rl = self.slider_geom
+        rl = self.pusher_r
         # compute contact location and bias
-        if contact_face == 'front':
-            x = xl/2
-            y = x*np.tan(psic)
-            bias = np.array([rl, 0.])
-        elif contact_face == 'back':
-            x = -xl/2
-            y = x*np.tan(psic)
-            bias = np.array([-rl, 0.])
-        elif contact_face == 'left':
-            y = yl/2
-            x = y/np.tan(psic)
-            bias = np.array([0., rl])
-        elif contact_face == 'right':
-            y = -yl/2
-            x = y/np.tan(psic)
-            bias = np.array([0., -rl])
-        else:
-            raise NotImplementedError('PushDTHybridSystem: the contact face {0} is not supported!'.format(contact_face))
+        t = self.curve.psic_to_t(psic)
+        x, y = self.curve.curve_func(t).elements()
+        norm_x, norm_y = self.curve.normal_func(t).elements()
+        bias = -rl * np.array([norm_x, norm_y])
         
         # convert to world frame
         pusher_centroid = state[:2] + np.matmul(rotation_matrix(state[2]), np.array([x, y])+bias)
@@ -1268,22 +1156,9 @@ class PushDTHybridSystem:
         :param contact_face: the contact face
         """
         psic = state[3]
-        xl, yl, rl = self.slider_geom
         # compute contact location and bias
-        if contact_face == 'front':
-            x = xl/2
-            y = x*np.tan(psic)
-        elif contact_face == 'back':
-            x = -xl/2
-            y = x*np.tan(psic)
-        elif contact_face == 'left':
-            y = yl/2
-            x = y/np.tan(psic)
-        elif contact_face == 'right':
-            y = -yl/2
-            x = y/np.tan(psic)
-        else:
-            raise NotImplementedError('PushDTHybridSystem: the contact face {0} is not supported!'.format(contact_face))
+        t = self.curve.psic_to_t(psic)
+        x, y = self.curve.curve_func(t).elements()
         
         # convert to world frame
         pusher_centroid = state[:2] + np.matmul(rotation_matrix(state[2]), np.array([x, y]))
@@ -1297,13 +1172,13 @@ class PushDTHybridSystem:
         """
         # restrict angle in range [-pi, pi]
         psic = restrict_angle_in_unit_circle(state[-1])
-        xl, yl = self.slider_geom[0], self.slider_geom[1]
+        x_min, y_min, x_max, y_max = self.slider_bbox
 
         # pre-compute psic of four corners
-        psic_front_left_corner = np.arctan2(0.5*yl, 0.5*xl)
-        psic_front_right_corner = np.arctan2(-0.5*yl, 0.5*xl)
-        psic_back_left_corner = np.arctan2(0.5*yl, -0.5*xl)
-        psic_back_right_corner = np.arctan2(-0.5*yl, -0.5*xl)
+        psic_front_left_corner  = np.arctan2(y_max, x_max)
+        psic_front_right_corner = np.arctan2(y_min, x_max)
+        psic_back_left_corner   = np.arctan2(y_max, x_min)
+        psic_back_right_corner  = np.arctan2(y_min, x_min)
 
         # detect the contact face
         if psic_front_right_corner <= psic <= psic_front_left_corner:
@@ -1317,6 +1192,7 @@ class PushDTHybridSystem:
 
         return contact_face
 
+    # not used
     def _get_unilateral_sliding_flag_from_state(self, state, contact_face):
         """
         If the pusher is too near the corner, sliding towards the corner is prohibited
@@ -1392,25 +1268,25 @@ class PushDTHybridSystem:
         :return: psic_min, the bound when sliding left
         :return: psic_max, the bound when sliding right, it's unecessary that psic_min < psic_max
         """
-        xl, yl = self.slider_geom[:2]
+        x_min, y_min, x_max, y_max = self.slider_bbox
         psic_max = restrict_angle_in_unit_circle(psic0 + self.dpsic_lim * self.reachable_set_time_step)
         psic_min = restrict_angle_in_unit_circle(psic0 - self.dpsic_lim * self.reachable_set_time_step)
         if contact_face == 'front':
-            x = 0.5 * xl
-            y_left = max(-0.5*yl+self.unilateral_sliding_region, x*np.tan(psic_min))
-            y_right = min(0.5*yl-self.unilateral_sliding_region, x*np.tan(psic_max))
+            x = x_max
+            y_left = max(y_min+self.unilateral_sliding_region, x*np.tan(psic_min))
+            y_right = min(y_max-self.unilateral_sliding_region, x*np.tan(psic_max))
         elif contact_face == 'back':
-            x = -0.5 * xl
-            y_left = min(0.5*yl-self.unilateral_sliding_region, x*np.tan(psic_min))
-            y_right = max(-0.5*yl+self.unilateral_sliding_region, x*np.tan(psic_max))
+            x = x_min
+            y_left = min(y_max-self.unilateral_sliding_region, x*np.tan(psic_min))
+            y_right = max(y_min+self.unilateral_sliding_region, x*np.tan(psic_max))
         elif contact_face == 'left':
-            y = 0.5 * yl
-            x_left = min(0.5*xl-self.unilateral_sliding_region, y/np.tan(psic_min))
-            x_right = max(-0.5*xl+self.unilateral_sliding_region, y/np.tan(psic_max))
+            y = y_max
+            x_left = min(x_max-self.unilateral_sliding_region, y/np.tan(psic_min))
+            x_right = max(x_min+self.unilateral_sliding_region, y/np.tan(psic_max))
         elif contact_face == 'right':
-            y = -0.5 * yl
-            x_left = max(-0.5*xl+self.unilateral_sliding_region, y/np.tan(psic_min))
-            x_right = min(0.5*xl-self.unilateral_sliding_region, y/np.tan(psic_max))
+            y = y_min
+            x_left = max(x_min+self.unilateral_sliding_region, y/np.tan(psic_min))
+            x_right = min(x_max-self.unilateral_sliding_region, y/np.tan(psic_max))
         else:
             raise ValueError('PushDTHybridSystem: The contact face {0} provided is illegal!'.format(contact_face))
 
@@ -1425,7 +1301,7 @@ class PushDTHybridSystem:
 
         return psic_min, psic_max
 
-    def _calculate_desired_psic_from_state_transition(self, from_state, to_state, contact_face):
+    def _calculate_desired_psic_from_state_transition(self, from_state, to_state, psic0, contact_face):
         """
         Calculate the psic needed to transit from from_state to to_state, for the given contact face
         :param from_state: from state, without psic
@@ -1433,23 +1309,28 @@ class PushDTHybridSystem:
         :param contact_face: contact face
         :return: psic in [-pi, pi]
         """
-        xl, yl = self.slider_geom[:2]
         delta_state = to_state - from_state
-        RxA = self.RxA(np.append(from_state, 0.), self.slider_geom).toarray()  # psic does not matters, set to zero
-        pseudo_f_ctact = np.matmul(np.linalg.inv(RxA[:2, :2]), delta_state[:2])
+        RxA = self.RxA(np.append(from_state, 0)).toarray()  # psic does not matters, set to zero
+        RxA_inv = np.linalg.inv(RxA)
+        pseudo_moment = np.matmul(RxA_inv, delta_state[:3])
+        pseudo_f_ctact = pseudo_moment[:2]
         fn, ft = pseudo_f_ctact[0], pseudo_f_ctact[1]
-        if contact_face == 'front':
-            xc = 0.5*xl
-            yc = ((delta_state[2]/RxA[2,2])-ft*xc)/(-fn)
-        elif contact_face == 'back':
-            xc = -0.5*xl
-            yc = ((delta_state[2]/RxA[2,2])-ft*xc)/(-fn)
-        elif contact_face == 'left':
-            yc = 0.5*yl
-            xc = ((delta_state[2]/RxA[2,2])+fn*yc)/(ft)
-        elif contact_face == 'right':
-            yc = -0.5*yl
-            xc = ((delta_state[2]/RxA[2,2])+fn*yc)/(ft)
+
+        psic_min, psic_max = self._get_psic_range(psic0, contact_face)
+        N = 1000
+        if psic_min < psic_max:
+            psic_sample = np.linspace(psic_min, psic_max, N)
+        else:
+            psic_min_sample_n = int(N * (np.pi - psic_min) / ((np.pi - psic_min) + (psic_max + np.pi)))
+            psic_max_sample_n = N - psic_min_sample_n
+            psic_sample = np.concatenate([np.linspace(psic_min, np.pi, psic_min_sample_n), np.linspace(-np.pi, psic_max, psic_max_sample_n)])
+        t_samples = np.array([self.curve.psic_to_t(psic) for psic in psic_sample]).reshape(-1)
+        pt_samples = self.curve.sample_pts(t_samples)
+
+        eps = -fn * pt_samples[:, 1] + ft * pt_samples[:, 0] - pseudo_moment[2]
+        idx = np.argmin(np.abs(eps))
+        xc, yc = pt_samples[idx, 0], pt_samples[idx, 1]
+
         psic = restrict_angle_in_unit_circle(np.arctan2(yc, xc))
         return psic
 
@@ -1464,10 +1345,18 @@ if __name__ == '__main__':
     from matplotlib import pyplot as plt
     from r3t.symbolic_system.symbolic_system_r3t import PolytopeReachableSet
     from pypolycontain.visualization.visualize_2D import visualize_3D_AH_polytope_push_planning
+    import os
+    import pickle
     ## ----------------------------------------------------
+    r3t_root_dir = os.environ.get("R3T_HOME")
+    planning_scene_path = os.path.join(r3t_root_dir, "data", "wshf", "2025_04_22_13_27")
+    planning_scene_pkl  = os.path.join(planning_scene_path, "scene.pkl")
+    scene = pickle.load(open(planning_scene_pkl, 'rb'))
+    control_pts = scene['target']['control_pts']
+    curve = bspline_curve(control_pts)
 
-
-    dyn = PushDTHybridSystem(quad_cost_input=[0.001, 0.001, 5e-6])  # test with default value
+    # dyn = PushDTHybridSystem(quad_cost_input=[0.001, 0.001, 5e-6])  # test with default value
+    dyn = PushDTHybridSystem(curve)
     
     distance_scaling_array = np.array([1.0, 1.0, 0.0695])
     # polytope_parent_state = np.array([0.345, 0.165, -0.99*np.pi, 0.9*np.pi])
@@ -1688,7 +1577,9 @@ if __name__ == '__main__':
     # print('state list: ', state_list)
     # # print('nearest polytope: ', nearest_polytope.mode_string)
     # print('test get_reachable_polytopes_with_variable_psic, time_cost={0}'.format(time.time() - start_time))
-    plt.savefig('./reachable_set.pdf')
+    # plt.savefig('./reachable_set.pdf')
+    plt.xlabel("x")
+    plt.ylabel("y")
     plt.legend()
     plt.show()
     ## ----------------------------------------------------
