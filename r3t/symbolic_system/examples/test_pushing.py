@@ -23,7 +23,7 @@ from r3t.symbolic_system.symbolic_system_r3t import *
 
 # scene configuration
 # --------------------------------------------------
-planning_scene_path = os.path.join(r3t_root_dir, "data", "wshf", "2025_04_22_13_27")
+planning_scene_path = os.path.join(r3t_root_dir, "data", "wshf", "2025_05_02_22_19")
 planning_scene_pkl  = os.path.join(planning_scene_path, "scene.pkl")
 scene = pickle.load(open(planning_scene_pkl, 'rb'))
 # --------------------------------------------------
@@ -46,7 +46,7 @@ slider_bbox = scene['target']['bbox']
 slider_control_pts = scene['target']['control_pts']
 slider_curve = bspline_curve(slider_control_pts)
 
-fric_coeff_slider_pusher = 0.1
+fric_coeff_slider_pusher = 0.01
 fric_coeff_slider_ground = 0.3
 reachable_set_time_step = 0.05
 nonlinear_dynamics_time_step = 0.01
@@ -54,8 +54,9 @@ nonlinear_dynamics_time_step = 0.01
 # planner_configuration
 max_planning_time = 100.0
 max_nodes_in_tree = 1000
-goal_tolerance = 0.001
-goal_sampling_bias = 0.1  # take sample from goal
+goal_tolerance = 0.01
+goal_sampling_bias_min = 0.1  # take sample from goal
+goal_sampling_bias_max = 0.5  # take sample from goal
 mode_consistent_sampling_bias = 0.2  # keey dynamic mode consistent (invariant contact face)
 distance_scaling_array = np.array([1.0, 1.0, 0.0695])
 quad_cost_state = np.diag([1.0, 1.0, 0.0695])
@@ -100,7 +101,8 @@ planning_dyn = PushDTHybridSystem(curve=slider_curve,
                                   miu_slider_ground=fric_coeff_slider_ground,
                                   quad_cost_input=quad_cost_input,
                                   reachable_set_time_step=reachable_set_time_step,
-                                  nldynamics_time_step=nonlinear_dynamics_time_step)
+                                  nldynamics_time_step=nonlinear_dynamics_time_step,
+                                  limit_surf_gain=0.0001)
 
 # --------------------------------------------------
 # General Hybrid R3T Algorithm
@@ -127,7 +129,8 @@ planning_dyn = PushDTHybridSystem(curve=slider_curve,
 planner = SymbolicSystem_Hybrid_R3T_Contact(init_state=np.append(x_init, psic_init),
                                             sys=planning_dyn,
                                             sampler=sampler,
-                                            goal_sampling_bias=goal_sampling_bias,
+                                            goal_sampling_bias_min=goal_sampling_bias_min,
+                                            goal_sampling_bias_max=goal_sampling_bias_max,
                                             mode_consistent_sampling_bias=mode_consistent_sampling_bias,
                                             step_size=reachable_set_time_step,
                                             planning_scene_pkl=planning_scene_pkl,

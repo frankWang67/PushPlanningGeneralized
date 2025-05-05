@@ -23,7 +23,7 @@ class ContactBasic:
     including friction coefficient, geometry ...
     """
     def __init__(self, miu_list=None, curve_list=None, bbox_list=None, A_list=None, curve_target=None, bbox_target=None, A_target=None, \
-                    miu_pusher_slider=0.3, contact_time=0., is_rect_flag=None) -> None:
+                    miu_pusher_slider=0.01, contact_time=0., is_rect_flag=None) -> None:
         self.miu_list = miu_list  # friction coeff between all objects and target
         self.curve_list = curve_list
         self.bbox_list = bbox_list  # geometry of all objects
@@ -44,7 +44,7 @@ class PlanningScene:
     Underlying class of NodeHybrid, including contact_flag, all polygons, and obstacle
     states
     """
-    def __init__(self, in_contact=False, target_curve=None, target_polygon=None, target_state=None, curves=None, polygons=None, states=None, types=None) -> None:
+    def __init__(self, in_contact=False, target_curve=None, target_polygon=None, target_state=None, curves=None, polygons=None, states=None, types=None, goal_state=None, goal_poly=None) -> None:
         self.in_contact = in_contact
         self.target_curve = target_curve
         self.target_polygon = target_polygon
@@ -53,7 +53,8 @@ class PlanningScene:
         self.polygons = polygons
         self.states = states
         self.types = types
-        self.goal_poly = None
+        self.goal_state = goal_state
+        self.goal_poly = goal_poly
 
 def load_planning_scene_from_file(scene_pkl):
     """
@@ -86,7 +87,9 @@ def load_planning_scene_from_file(scene_pkl):
                           curves=obstacle_curves,
                           polygons=obstacle_polygons,
                           states=obstacle_states,
-                          types=types)
+                          types=types,
+                          goal_state=raw['goal'],
+                          goal_poly=raw['goal_poly'])
 
     info = ContactBasic(miu_list=raw['obstacle']['miu'],
                         curve_list=obstacle_curves,

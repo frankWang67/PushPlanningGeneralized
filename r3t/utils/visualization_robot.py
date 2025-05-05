@@ -587,7 +587,7 @@ if __name__ == '__main__':
     from r3t.polygon.scene import *
     # WARNING: partially initialized
 
-    planned_path_name = os.path.join(r3t_root_dir, "data", "wshf", "2025_04_22_13_27")
+    planned_path_name = os.path.join(r3t_root_dir, "data", "wshf", "2025_05_02_22_19")
     planned_file_name = 'planned_path.pkl'
     planned_data = pickle.load(open(os.path.join(planned_path_name, planned_file_name), 'rb'))
 

@@ -126,3 +126,89 @@ class bspline_curve:
         pt_samples = np.array(spi.splev(t_samples, self.tck)).T
 
         return pt_samples
+    
+if __name__ == "__main__":
+    import time
+
+    control_points = np.array([[-0.0878332 ,  0.00894283],
+                               [-0.06927735, -0.00348606],
+                               [-0.05296399, -0.01158518],
+                               [-0.04714031, -0.01441735],
+                               [-0.041185  , -0.01692681],
+                               [-0.0356633 , -0.02305051],
+                               [-0.02967586, -0.02596084],
+                               [-0.02266738, -0.02777073],
+                               [-0.00996478, -0.02773122],
+                               [-0.00041986, -0.02406837],
+                               [ 0.0044366 , -0.02229121],
+                               [ 0.0168373 , -0.02315491],
+                               [ 0.03243288, -0.02825957],
+                               [ 0.0445449 , -0.02781803],
+                               [ 0.06018997, -0.02223057],
+                               [ 0.06313941, -0.01095734],
+                               [ 0.063856  ,  0.00187829],
+                               [ 0.06498363,  0.00934821],
+                               [ 0.06430348,  0.02594651],
+                               [ 0.06331416,  0.0364197 ],
+                               [ 0.04723743,  0.04102006],
+                               [ 0.03250469,  0.04007967],
+                               [ 0.0155726 ,  0.03512453],
+                               [ 0.00858525,  0.03455442],
+                               [ 0.00335342,  0.035297  ],
+                               [-0.00586487,  0.0390531 ],
+                               [-0.01101431,  0.04052551],
+                               [-0.02407005,  0.04040656],
+                               [-0.02948088,  0.03901881],
+                               [-0.03477284,  0.03622134],
+                               [-0.04096227,  0.03262363],
+                               [-0.04923069,  0.0288909 ],
+                               [-0.06533611,  0.02522149],
+                               [-0.07393795,  0.0175605 ],
+                               [-0.0878332 ,  0.00894283]])
+    curve = bspline_curve(control_points)
+    
+    N = 10000
+
+    t_samples = np.linspace(0, 1, N)
+
+    start_time = time.time()
+    for i in range(N):
+        curve.curve_func(t_samples[i])
+    print(f"Time consumed for calculate curve point for {N} times: {time.time() - start_time}")
+
+    start_time = time.time()
+    spi.splev(t_samples, curve.tck)
+    print(f"Time consumed for numerically calculate curve point for {N} times: {time.time() - start_time}")
+
+    start_time = time.time()
+    for i in range(N):
+        curve.tangent_func(t_samples[i])
+    print(f"Time consumed for calculate tangent for {N} times: {time.time() - start_time}")
+
+    start_time = time.time()
+    for i in range(N):
+        curve.normal_func(t_samples[i])
+    print(f"Time consumed for calculate normal for {N} times: {time.time() - start_time}")
+
+    start_time = time.time()
+    for i in range(N):
+        tangent = curve.tangent_func(t_samples[i])
+        normal = np.array([-tangent[1], tangent[0]])
+    print(f"Time consumed for calculate tangent and normal for {N} times: {time.time() - start_time}")
+
+    psic_samples = np.linspace(-np.pi, np.pi, N)
+    start_time = time.time()
+    for i in range(N):
+        curve.psic_to_t_func(psic_samples[i])
+    print(f"Time consumed for calculate psic2t for {N} times: {time.time() - start_time}")
+
+    start_time = time.time()
+    for i in range(N):
+        spi.splev(t_samples[i], curve.tck, der=1)
+    print(f"Time consumed for numerically calculate tangent for {N} times: {time.time() - start_time}")
+
+    start_time = time.time()
+    for i in range(N):
+        tangent = np.array(spi.splev(t_samples[i], curve.tck, der=1))
+        norm = np.array([-tangent[1], tangent[0]])
+    print(f"Time consumed for numerically calculate tangent and normal for {N} times: {time.time() - start_time}")

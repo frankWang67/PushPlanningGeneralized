@@ -958,7 +958,7 @@ class SymbolicSystem_Hybrid_R3T(R3T_Hybrid):
 
 class SymbolicSystem_Hybrid_R3T_Contact(R3T_Hybrid_Contact):
     def __init__(self, init_state, sys:PushDTHybridSystem, \
-                 sampler, goal_sampling_bias, mode_consistent_sampling_bias, \
+                 sampler, goal_sampling_bias_min, goal_sampling_bias_max, mode_consistent_sampling_bias, \
                  step_size, \
                  planning_scene_pkl = None, \
                  contains_goal_function = None, cost_to_go_function=None, \
@@ -1017,7 +1017,8 @@ class SymbolicSystem_Hybrid_R3T_Contact(R3T_Hybrid_Contact):
                                     planning_scene_pkl=self.planning_scene_pkl,
                                     compute_reachable_set=compute_reachable_set,
                                     sampler=sampler,
-                                    goal_sampling_bias=goal_sampling_bias,
+                                    goal_sampling_bias_min=goal_sampling_bias_min,
+                                    goal_sampling_bias_max=goal_sampling_bias_max,
                                     distance_scaling_array=distance_scaling_array,
                                     reachable_set_tree_class=PolytopeReachableSetTree,
                                     state_tree_class=SymbolicSystem_StateTree,

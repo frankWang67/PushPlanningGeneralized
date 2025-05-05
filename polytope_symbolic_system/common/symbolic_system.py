@@ -425,7 +425,7 @@ class DTHybridSystem:
 class PushDTHybridSystem:
     def __init__(self, curve: bspline_curve, f_lim=0.3, dpsic_lim=3.0, unilateral_sliding_region=0.005, slider_bbox=[-0.035, -0.06, 0.035, 0.06], pusher_r = 0.0075,
                        miu_slider_pusher=0.3, miu_slider_ground=0.2, quad_cost_input=[0.1, 0.1, 0.1],
-                       reachable_set_time_step=0.05, nldynamics_time_step=0.01) -> None:
+                       reachable_set_time_step=0.05, nldynamics_time_step=0.01, limit_surf_gain=1.) -> None:
         """
         The PushDTHybridSystem, to do forward simulation, compute reachable polytopes of the pusher-slider system
         :param f_lim: contact force limit
@@ -514,7 +514,7 @@ class PushDTHybridSystem:
         __rl = cs.MX.sym('rl')
         self.rl = __rl
         
-        __A = cs.MX(self.curve.lim_surf_A)
+        __A = cs.MX(self.curve.lim_surf_A) * limit_surf_gain
 
         #  -------------------------------------------------------------------
 

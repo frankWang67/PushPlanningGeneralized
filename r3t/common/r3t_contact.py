@@ -137,7 +137,7 @@ class Node_Hybrid_Contact:
 class R3T_Hybrid_Contact:
     def __init__(self, root_state, planning_scene_pkl, \
                  compute_reachable_set, sampler, \
-                 goal_sampling_bias, \
+                 goal_sampling_bias_min, goal_sampling_bias_max, \
                  distance_scaling_array, \
                  reachable_set_tree_class, state_tree_class, path_class, dim_u, rewire_radius = None, \
                  print_flag=True):
@@ -184,7 +184,15 @@ class R3T_Hybrid_Contact:
         # (state with psic, input) --> the PolytopeReachableSetTree object
         self.compute_reachable_set = compute_reachable_set
         self.sampler = sampler
-        self.goal_sampling_bias = goal_sampling_bias
+
+        self.goal_sampling_bias_min = goal_sampling_bias_min
+        self.goal_sampling_bias_max = goal_sampling_bias_max
+        self.goal_sampling_bias = goal_sampling_bias_min
+        self.start_xy = np.array(scene.target_state[:2])
+        self.goal_xy = np.array(scene.goal_state[:2])
+        self.dist_start_to_goal = np.linalg.norm(self.start_xy - self.goal_xy)
+        self.min_dist_to_goal = self.dist_start_to_goal
+
         self.goal_state = None
         self.goal_node = None
         self.path_class = path_class
@@ -267,6 +275,11 @@ class R3T_Hybrid_Contact:
 
         error_code = -1
 
+        temp_new_state = new_state.copy()
+        temp_new_state[:3] += (np.random.random(3) - 0.5) * 0.01
+        if nearest_node.reachable_set.contains(temp_new_state, return_closest_state=False):
+            new_state = temp_new_state
+
         # extension validity
         if np.linalg.norm(new_state-nearest_node.state[-1]) < nearest_node.reachable_set.epsilon:
             error_code = 0
@@ -290,17 +303,11 @@ class R3T_Hybrid_Contact:
 
         # collision check and contact reconfiguration (planning with contact)
         try:
-            # in_contact_flag, can_extend_flag, new_planning_scene = \
-            #     collision_check_and_contact_reconfig(basic=self.contact_basic,
-            #                                         scene=nearest_node.planning_scene,
-            #                                         state_list=path)
-            # new_state_updated = new_state.copy()
-
             # get pushed point and velocity
             # ----------------------------------------
             contact_face = closest_polytope.mode_string[0]
-            pusher_contact_p0 = self.sys.get_contact_location(path[0], contact_face=contact_face)
-            pusher_contact_pf = self.sys.get_contact_location(path[-1], contact_face=contact_face)
+            pusher_contact_p0 = self.sys.get_pusher_location(path[0], contact_face=contact_face)
+            pusher_contact_pf = self.sys.get_pusher_location(path[-1], contact_face=contact_face)
             pusher_velocity = (pusher_contact_pf - pusher_contact_p0) / self.sys.reachable_set_time_step
             # # ----------------------------------------
             if closest_polytope.mode_consistent:
@@ -309,15 +316,22 @@ class R3T_Hybrid_Contact:
                 psic = self.sys.psic_each_face_center[contact_face]
             self.simulator.reset_scene(scene=nearest_node.planning_scene, contact_face=contact_face, psic=psic)
             in_contact_flag, can_extend_flag, new_state_updated, state_list_updated, new_planning_scene = \
-                self.simulator.simulate(v_pusher=pusher_velocity, sim_time=self.sys.reachable_set_time_step)
+                self.simulator.simulate(path=path, contact_face=contact_face, v_pusher=pusher_velocity, sim_time=self.sys.reachable_set_time_step)
 
-            if in_contact_flag and can_extend_flag:
+            if can_extend_flag:
                 path = state_list_updated.copy()
+
+            # in_contact_flag = False
+            # can_extend_flag = True
+            # new_state_updated = new_state_with_psic
+            # new_planning_scene = copy.deepcopy(nearest_node.planning_scene)
+            # new_planning_scene.target_state = new_state_updated[:3]
+            # new_planning_scene.target_polygon = gen_polygon(new_state_updated[:3], self.contact_basic.bbox_target)
             
         ## debug the last step
         except Exception as e:
             print('R3T_Hybrid: caught exeption %s' % e)
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
 
             # in_contact_flag, can_extend_flag, new_planning_scene = \
             #     collision_check_and_contact_reconfig(basic=self.contact_basic,
@@ -353,7 +367,7 @@ class R3T_Hybrid_Contact:
 
         # can connect
         new_node = self.create_child_node(parent_node=nearest_node,
-                                          child_state=np.append(new_state_updated, new_state_with_psic[-1]),
+                                          child_state=new_state_updated,
                                           input_from_parent=applied_u,
                                           mode_string_from_parent=closest_polytope.mode_string,
                                           cost_from_parent=cost_to_go,
@@ -454,7 +468,7 @@ class R3T_Hybrid_Contact:
                 if np.random.rand() <= self.goal_sampling_bias:
                     random_sample = goal_state
                     if self.print_flag:
-                        print('R3T_Hybrid: sampling from goal!')
+                        print(f'R3T_Hybrid: sampling from goal! Current goal_sampling_bias: {self.goal_sampling_bias}')
                 else:
                     random_sample = self.sampler()
                 sample_count+=1
@@ -473,6 +487,12 @@ class R3T_Hybrid_Contact:
                                                                                            Z_obs_list=Z_obs_list,
                                                                                            duplicate_search_azimuth=True,
                                                                                            slider_in_contact=nearest_node.planning_scene.in_contact)
+                    new_dist = np.linalg.norm(new_state[:2] - self.goal_xy)
+                    if new_dist < self.min_dist_to_goal:
+                        self.min_dist_to_goal = new_dist
+                        interp_t = 1 - new_dist / self.dist_start_to_goal
+                        self.goal_sampling_bias = (1 - interp_t ** 5) * self.goal_sampling_bias_min + (interp_t ** 5) * self.goal_sampling_bias_max
+
                     if discard:
                         if self.print_flag:
                             print('R3T_Hybrid: extension from {0} to {1} failed due to discard!'.format(nearest_node.state[:-1], new_state))
@@ -503,7 +523,7 @@ class R3T_Hybrid_Contact:
                 except Exception as e:
                     if self.print_flag:
                         print('R3T_Hybrid: caught exeption %s' % e)
-                    import pdb; pdb.set_trace()
+                    # import pdb; pdb.set_trace()
                     is_extended = False
 
                 if not is_extended:

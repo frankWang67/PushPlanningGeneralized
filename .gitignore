@@ -1,6 +1,7 @@
 *.pyc
 *.npy
 *.zip
+MUJOCO_LOG.TXT
 
 # data
 data/

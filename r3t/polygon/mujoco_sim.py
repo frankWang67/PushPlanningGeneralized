@@ -16,13 +16,13 @@ HEIGHT = 480
 
 OBS_HEIGHT = 0.03
 PUSHER_HEIGHT = 0.15
-DAMPING_RATIO = 3
+DAMPING_RATIO = 1.0
 
 class MujocoSimulator:
     """
     MuJoCo collision check reference: https://mujoco.readthedocs.io/en/stable/modeling.html#solver-parameters
     """
-    def __init__(self, info: ContactBasic, scene: PlanningScene, sys: PushDTHybridSystem, contact_face, psic, time_step=0.005, vis=False):
+    def __init__(self, info: ContactBasic, scene: PlanningScene, sys: PushDTHybridSystem, contact_face, psic, time_step=0.01, time_scale=10, vis=False):
         try:
             assert isinstance(info, ContactBasic)
             assert isinstance(scene, PlanningScene)
@@ -33,6 +33,7 @@ class MujocoSimulator:
         self.scene = scene
         self.sys = sys
         self.time_step = time_step
+        self.time_scale = time_scale
         self.vis = vis
 
         mesh_str = "<asset>"
@@ -65,8 +66,14 @@ class MujocoSimulator:
         self.spec.from_string(xml)
 
         # Add obstacles
+        self.fixed_obs_list = []
+        self.fixed_obs_pos_list = []
         for i in range(len(scene.states)):
-            self.add_object(f'obs{i+1}', scene.states[i], True)
+            obs_name = f'obs{i+1}'
+            self.add_object(obs_name, scene.states[i], True)
+            if not scene.types[i]:
+                self.fixed_obs_list.append(obs_name)
+                self.fixed_obs_pos_list.append(np.array(scene.states[i][:2]))
 
         # Add slider
         self.add_object('slider', scene.target_state, False)
@@ -130,7 +137,7 @@ class MujocoSimulator:
 
         mj.mj_step(self.model, self.data)
 
-    def simulate(self, v_pusher, sim_time):
+    def simulate(self, path, contact_face, v_pusher, sim_time):
         """
         Simulate to update planning scene
         :param v_pusher: the velocity of the pusher
@@ -142,48 +149,59 @@ class MujocoSimulator:
         :return: state list updated - the updated path of the slider from the last node to the new one
         :return: new scene - new PlanningScene object
         """
-        try:
-            state_list_updated = self.get_target_state_with_psic().reshape(-1, 4)
-            steps = round(sim_time / self.time_step)
-            if steps == 0:
-                raise ValueError(f"MuJoCo simulation time step too small. Now it's {self.time_step}, while the simulation time is {sim_time}.")
-            for i in range(steps):
-                self.data.mocap_pos[self.mocap_id][0] += v_pusher[0] * self.time_step
-                self.data.mocap_pos[self.mocap_id][1] += v_pusher[1] * self.time_step
-                mj.mj_step(self.model, self.data)
-                if self.vis and i % 5 == 0:
+        state_list_updated = self.get_target_state_with_psic().reshape(-1, 4)
+        sim_time *= self.time_scale
+        v_pusher /= self.time_scale
+        steps = round(sim_time / self.time_step)
+        if steps == 0:
+            raise ValueError(f"MuJoCo simulation time step too small. Now it's {self.time_step}, while the simulation time is {sim_time}.")
+        # path_interp = np.linspace(path[0], path[-1], steps+1)
+        for i in range(steps):
+            self.data.mocap_pos[self.mocap_id][0] += v_pusher[0] * self.time_step
+            self.data.mocap_pos[self.mocap_id][1] += v_pusher[1] * self.time_step
+            # pusher_loc = self.sys.get_pusher_location(path_interp[i], contact_face)
+            # self.data.mocap_pos[self.mocap_id][0] = pusher_loc[0]
+            # self.data.mocap_pos[self.mocap_id][1] = pusher_loc[1]
+            mj.mj_step(self.model, self.data)
+            if i % self.time_scale == 0 or i == steps - 1:
+                if self.vis:
                     self.renderer.update_scene(self.data)
                     img = self.renderer.render()
                     cv2.imshow("Pushing Simulation", img)
                     if cv2.waitKey(1) & 0xFF == ord('q'): 
                         exit(0)
 
-                pusher_slider_in_contact = self.get_slider_pusher_contact_flag()
-
+                # pusher_slider_in_contact = self.get_slider_pusher_contact_flag()
                 state_with_psic = self.get_target_state_with_psic()
                 state_list_updated = np.concatenate((state_list_updated, state_with_psic.reshape(-1, 4)), axis=0)
 
-            if self.vis:
-                cv2.destroyAllWindows()
+        if self.vis:
+            cv2.destroyAllWindows()
 
-            new_state_updated = state_with_psic[:3]
+        new_state_updated = state_with_psic
 
-            new_planning_scene = copy.deepcopy(self.scene)
-            for i in range(len(new_planning_scene.states)):
-                obs_name = f"obs{i+1}"
-                obs_pos = self.get_body_xy_array(obs_name).tolist()
-                obs_pos.append(self.get_body_theta(obs_name))
-                new_planning_scene.states[i] = obs_pos
-                new_planning_scene.polygons[i] = gen_polygon(coord=obs_pos, bbox=self.info.bbox_list[i])
-            new_planning_scene.target_state = new_state_updated
-            new_planning_scene.target_polygon = gen_polygon(coord=new_state_updated, bbox=self.info.bbox_target)
-            
-            in_contact_flag = self.get_slider_contact_flag()
-            new_planning_scene.in_contact = in_contact_flag
+        new_planning_scene = copy.deepcopy(self.scene)
+        for i in range(len(new_planning_scene.states)):
+            obs_name = f"obs{i+1}"
+            obs_pos = self.get_body_xy_array(obs_name).tolist()
+            obs_pos.append(self.get_body_theta(obs_name))
+            new_planning_scene.states[i] = obs_pos
+            new_planning_scene.polygons[i] = gen_polygon(coord=obs_pos, bbox=self.info.bbox_list[i])
+        new_planning_scene.target_state = new_state_updated[:3]
+        new_planning_scene.target_polygon = gen_polygon(coord=new_state_updated[:3], bbox=self.info.bbox_target)
+        
+        in_contact_flag = self.get_slider_contact_flag()
+        new_planning_scene.in_contact = in_contact_flag
+        for i in range(len(self.fixed_obs_list)):
+            obs_name = self.fixed_obs_list[i]
+            obs_state = self.data.body(obs_name).xpos[:2]
+            if np.linalg.norm(obs_state - self.fixed_obs_pos_list[i]) > 1e-2:
+                # print(f"{obs_name=}")
+                # print(f"{obs_state=}")
+                # print(f"{self.fixed_obs_pos_list[i]=}")
+                return in_contact_flag, False, None, None, new_planning_scene
 
-            return in_contact_flag, True, new_state_updated, state_list_updated, new_planning_scene
-        except:
-            return False, False, None, None, None
+        return in_contact_flag, True, new_state_updated, state_list_updated, new_planning_scene
         
     def get_quat_from_theta(self, theta):
         quat_xyzw = R.Rotation.from_euler('xyz', [0.0, 0.0, theta]).as_quat()
@@ -218,6 +236,21 @@ class MujocoSimulator:
         contact_geom2_slider_idx = contact_geom2_slider_idx[self.data.contact.geom1[contact_geom2_slider_idx] != pusher_id]
         contact_slider_idx = np.concatenate((contact_geom1_slider_idx, contact_geom2_slider_idx))
         in_contact_flag = (contact_slider_idx.size > 0)
+
+        return in_contact_flag
+    
+    def get_obstacle_contact_flag(self, obs_name):
+        world_id  = self.data.body("world").id
+        ground_id = self.data.body("ground").id
+        obs_id = self.data.body(obs_name).id
+        contact_geom1_obs_idx = np.where(self.data.contact.geom1 == obs_id)[0]
+        contact_geom1_obs_idx = contact_geom1_obs_idx[self.data.contact.geom2[contact_geom1_obs_idx] != world_id]
+        contact_geom1_obs_idx = contact_geom1_obs_idx[self.data.contact.geom2[contact_geom1_obs_idx] != ground_id]
+        contact_geom2_obs_idx = np.where(self.data.contact.geom2 == obs_id)[0]
+        contact_geom2_obs_idx = contact_geom2_obs_idx[self.data.contact.geom1[contact_geom2_obs_idx] != world_id]
+        contact_geom2_obs_idx = contact_geom2_obs_idx[self.data.contact.geom1[contact_geom2_obs_idx] != ground_id]
+        contact_obs_idx = np.concatenate((contact_geom1_obs_idx, contact_geom2_obs_idx))
+        in_contact_flag = (contact_obs_idx.size > 0)
 
         return in_contact_flag
     
