@@ -5,10 +5,13 @@ from collections import deque
 import matplotlib.pyplot as plt
 from matplotlib import collections as mc
 from matplotlib import transforms, animation
+from matplotlib.path import Path
 import numpy as np
 import os
 import pypolycontain.visualization.visualize_2D as vis2D
 from polytope_symbolic_system.common.utils import *
+
+PUSHER_R = 0.0075
 
 def visualize_node_tree_2D(rrt, fig=None, ax=None, s=1, linewidths = 0.25, show_path_to_goal=False, goal_override=None, dims=[0,1]):
     if fig is None or ax is None:
@@ -379,18 +382,18 @@ class PushPlanningVisualizer:
         :param ax: the Axes object
         """
         # plot slider
-        Xl, Yl, Rl = self.contact_basic.geom_target
         x_s0 = self.X_slider[0]
-        R_s0 = rotation_matrix(0.0)
-        bias_s0 = R_s0.dot([-Xl/2., -Yl/2.])
-        self.slider = patches.Rectangle(
-            x_s0[:2]+bias_s0[:2], Xl, Yl, angle=0.0, facecolor='#1f77b4', edgecolor='black'
+        contour_path = Path(self.contact_basic.curve_target.pt_samples)
+        trans_ax = ax.transData
+        transf_s0 = transforms.Affine2D().translate(x_s0[0], x_s0[1]).rotate_around(x_s0[0], x_s0[1], x_s0[2])
+        self.slider = patches.PathPatch(
+            contour_path, transform=transf_s0+trans_ax, facecolor='#1f77b4', edgecolor='black'
         )
 
         # plot pusher
         x_p0 = self.X_pusher[0]
         self.pusher = patches.Circle(
-            x_p0, radius=Rl, facecolor='#7f7f7f', edgecolor='black'
+            x_p0, radius=PUSHER_R, facecolor='#7f7f7f', edgecolor='black'
         )
 
         # plot obstacles
@@ -399,11 +402,10 @@ class PushPlanningVisualizer:
         cmap = plt.cm.Pastel2
         for k in range(self.num_obstacles):
             x_o0 = self.X_obstacles[0][k]
-            Xl, Yl = self.contact_basic.geom_list[k]
-            R_o0 = rotation_matrix(0.0)
-            bias_o0 = R_o0.dot([-Xl/2., -Yl/2.])
-            new_obstacle = patches.Rectangle(
-                x_o0[:2]+bias_o0[:2], Xl, Yl, angle=0.0, facecolor=cmap(k), edgecolor='black'
+            contour_path = Path(self.contact_basic.curve_list[k].pt_samples)
+            transf_o0 = transforms.Affine2D().translate(x_o0[0], x_o0[1]).rotate_around(x_o0[0], x_o0[1], x_o0[2])
+            new_obstacle = patches.PathPatch(
+                contour_path, transform=transf_o0+trans_ax, facecolor=cmap(k), edgecolor='black'
             )
             self.obstacles.append(new_obstacle)
         
@@ -422,18 +424,9 @@ class PushPlanningVisualizer:
         trans_ax = ax.transData
 
         # render slider
-        Xl, Yl, Rl = self.contact_basic.geom_target
         x_si = self.X_slider[i]
-        R_si = rotation_matrix(x_si[2])
-        bias_si = R_si.dot([-Xl/2., -Yl/2.])
-
-        bottom_left_coords = x_si[:2] + bias_si[:2]
-        bottom_left_coords = trans_ax.transform(bottom_left_coords)
-        trans_si = transforms.Affine2D().rotate_around(
-            bottom_left_coords[0], bottom_left_coords[1], x_si[2]
-        )
-        self.slider.set_transform(trans_ax+trans_si)
-        self.slider.set_xy([x_si[0]+bias_si[0], x_si[1]+bias_si[1]])
+        transf_si = transforms.Affine2D().translate(x_si[0], x_si[1]).rotate_around(x_si[0], x_si[1], x_si[2])
+        self.slider.set_transform(transf_si + trans_ax)
 
         # render pusher
         x_pi = self.X_pusher[i]
@@ -442,17 +435,8 @@ class PushPlanningVisualizer:
         # render obstacles
         for k in range(self.num_obstacles):
             x_oi = self.X_obstacles[i][k]
-            Xl, Yl = self.contact_basic.geom_list[k]
-            R_oi = rotation_matrix(x_oi[2])
-            bias_oi = R_oi.dot([-Xl/2., -Yl/2.])
-
-            bottom_left_coords = x_oi[:2] + bias_oi[:2]
-            bottom_left_coords = trans_ax.transform(bottom_left_coords)
-            trans_oi = transforms.Affine2D().rotate_around(
-                bottom_left_coords[0], bottom_left_coords[1], x_oi[2]
-            )
-            self.obstacles[k].set_transform(trans_ax+trans_oi)
-            self.obstacles[k].set_xy([x_oi[0]+bias_oi[0], x_oi[1]+bias_oi[1]])
+            transf_oi = transforms.Affine2D().translate(x_oi[0], x_oi[1]).rotate_around(x_oi[0], x_oi[1], x_oi[2])
+            self.obstacles[k].set_transform(transf_oi + trans_ax)
         
         return []
 
@@ -603,7 +587,7 @@ if __name__ == '__main__':
     from r3t.polygon.scene import *
     # WARNING: partially initialized
 
-    planned_path_name = os.path.join(r3t_root_dir, "data", "wshf", "2025_04_12_00_32")
+    planned_path_name = os.path.join(r3t_root_dir, "data", "wshf", "2025_05_02_22_19")
     planned_file_name = 'planned_path.pkl'
     planned_data = pickle.load(open(os.path.join(planned_path_name, planned_file_name), 'rb'))
 
@@ -618,12 +602,13 @@ if __name__ == '__main__':
     # scene_path_name = os.path.join(r3t_root_dir, "data")
     scene_path_name = planned_path_name
     scene_file_name = 'scene.pkl'
-    scene_data = pickle.load(open(os.path.join(scene_path_name, scene_file_name), 'rb'))
-    basic_info = ContactBasic(miu_list=scene_data['obstacle']['miu'],
-                              geom_list=scene_data['obstacle']['geom'],
-                              geom_target=[scene_data['target']['geom'][0], scene_data['target']['geom'][1], 0.0075],
-                              contact_time=scene_data['contact']['dt']
-                             )
+    # scene_data = pickle.load(open(os.path.join(scene_path_name, scene_file_name), 'rb'))
+    # basic_info = ContactBasic(miu_list=scene_data['obstacle']['miu'],
+    #                           geom_list=scene_data['obstacle']['geom'],
+    #                           geom_target=[scene_data['target']['geom'][0], scene_data['target']['geom'][1], 0.0075],
+    #                           contact_time=scene_data['contact']['dt']
+    #                          )
+    _, basic_info = load_planning_scene_from_file(os.path.join(scene_path_name, scene_file_name))
 
     data = planned_data
     visualizer = PushPlanningVisualizer(basic_info=basic_info,

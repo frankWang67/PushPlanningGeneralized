@@ -380,7 +380,7 @@ class PolytopeReachableSet(ReachableSet):
                                               mode_string=closest_polytope.mode_string)
                 # collision check
                 if Z_obs_list is not None:
-                    collision_flag = intersects(Z_obs_list, gen_polygon(state[:-1], self.sys.slider_geom[:2]))
+                    collision_flag = intersects(Z_obs_list, gen_polygon(state[:-1], self.sys.slider_bbox))
                     if collision_flag:
                         # FIXME: closest point is unreachable, should return parent_state, state or closest_point?
                         return closest_point.flatten(), True, np.asarray([]), closest_polytope
@@ -442,6 +442,7 @@ class PolytopeReachableSet(ReachableSet):
                                                      nominal_x=actual_parent_state,
                                                      nominal_u=closest_polytope.applied_u,
                                                      mode_string=closest_polytope.mode_string)
+        # approximate_input = self.sys.solve_discrete_lqr(actual_parent_state, np.append(goal_state, current_psic), self.sys.nldynamics_time_step, closest_polytope.mode_string[0])
 
         # calculate path
         collision_free_flag, reached_state, state_list = self.sys.collision_free_forward_simulation(starting_state=actual_parent_state,
@@ -479,6 +480,7 @@ class PolytopeReachableSet(ReachableSet):
         # get goal state with correct psic
         goal_psic = self.sys._calculate_desired_psic_from_state_transition(from_state=self.parent_state[:-1],
                                                                            to_state=goal_state,
+                                                                           psic0=current_psic,
                                                                            contact_face=closest_polytope.mode_string[0])
         actual_goal_state = np.append(goal_state, angle_diff(current_psic, goal_psic)+current_psic)
         
@@ -517,7 +519,7 @@ class PolytopeReachableSet(ReachableSet):
                                           mode_string=closest_polytope.mode_string).reshape(-1)
 
             if Z_obs_list is not None:
-                collision_flag = intersects(Z_obs_list, gen_polygon(state[:-1], self.sys.slider_geom[:2]))
+                collision_flag = intersects(Z_obs_list, gen_polygon(state[:-1], self.sys.slider_bbox))
                 if collision_flag:
                     return (False, None, None, None, None)
             state_list.append(state)
@@ -956,7 +958,7 @@ class SymbolicSystem_Hybrid_R3T(R3T_Hybrid):
 
 class SymbolicSystem_Hybrid_R3T_Contact(R3T_Hybrid_Contact):
     def __init__(self, init_state, sys:PushDTHybridSystem, \
-                 sampler, goal_sampling_bias, mode_consistent_sampling_bias, \
+                 sampler, goal_sampling_bias_min, goal_sampling_bias_max, mode_consistent_sampling_bias, \
                  step_size, \
                  planning_scene_pkl = None, \
                  contains_goal_function = None, cost_to_go_function=None, \
@@ -1015,7 +1017,8 @@ class SymbolicSystem_Hybrid_R3T_Contact(R3T_Hybrid_Contact):
                                     planning_scene_pkl=self.planning_scene_pkl,
                                     compute_reachable_set=compute_reachable_set,
                                     sampler=sampler,
-                                    goal_sampling_bias=goal_sampling_bias,
+                                    goal_sampling_bias_min=goal_sampling_bias_min,
+                                    goal_sampling_bias_max=goal_sampling_bias_max,
                                     distance_scaling_array=distance_scaling_array,
                                     reachable_set_tree_class=PolytopeReachableSetTree,
                                     state_tree_class=SymbolicSystem_StateTree,

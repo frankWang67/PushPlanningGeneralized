@@ -11,22 +11,39 @@ def restrict_angle_in_unit_circle(angle):
     """
     return -np.pi + (angle - (-np.pi)) % (2*np.pi)
 
-def gen_polygon(coord, geom, type='box'):
+# def gen_polygon(coord, geom, type='box'):
+#     """
+#     Return the shapely.Polygon object of (x, y, theta)
+#     :param coord: (x, y, theta) coordinates
+#     :param beta: (xl, yl) geometry
+#     :param type: 'box', 'polygon'
+#     :return: Polygon
+#     """
+#     x, y, theta = coord
+
+#     if type == 'box':
+#         xl, yl = geom
+#         poly = Polygon([(0.5*xl, 0.5*yl), (-0.5*xl, 0.5*yl), (-0.5*xl, -0.5*yl), (0.5*xl, -0.5*yl), (0.5*xl, 0.5*yl)])
+#     elif type == 'polygon':
+#         # geom => 2d coordinates of vertex, in order, does not matter if the line ring is not closed
+#         poly = Polygon(geom)
+    
+#     poly = affinity.rotate(poly, theta, origin='center', use_radians=True)
+#     poly = affinity.translate(poly, x, y)
+    
+#     return poly
+
+def gen_polygon(coord, bbox):
     """
     Return the shapely.Polygon object of (x, y, theta)
     :param coord: (x, y, theta) coordinates
-    :param beta: (xl, yl) geometry
-    :param type: 'box', 'polygon'
+    :param bbox: [x_min, y_min, x_max, y_max]
     :return: Polygon
     """
     x, y, theta = coord
 
-    if type == 'box':
-        xl, yl = geom
-        poly = Polygon([(0.5*xl, 0.5*yl), (-0.5*xl, 0.5*yl), (-0.5*xl, -0.5*yl), (0.5*xl, -0.5*yl), (0.5*xl, 0.5*yl)])
-    elif type == 'polygon':
-        # geom => 2d coordinates of vertex, in order, does not matter if the line ring is not closed
-        poly = Polygon(geom)
+    x_min, y_min, x_max, y_max = bbox
+    poly = Polygon([(x_min, y_min), (x_max, y_min), (x_max, y_max), (x_min, y_max)])
     
     poly = affinity.rotate(poly, theta, origin='center', use_radians=True)
     poly = affinity.translate(poly, x, y)

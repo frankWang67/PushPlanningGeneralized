@@ -17,12 +17,13 @@ import numpy as np
 import pickle
 
 from polytope_symbolic_system.common.symbolic_system import *
+from polytope_symbolic_system.common.bspline import bspline_curve
 from r3t.symbolic_system.symbolic_system_r3t import *
 
 
 # scene configuration
 # --------------------------------------------------
-planning_scene_path = os.path.join(r3t_root_dir, "data", "wshf", "2025_04_12_00_32")
+planning_scene_path = os.path.join(r3t_root_dir, "data", "wshf", "2025_05_02_22_19")
 planning_scene_pkl  = os.path.join(planning_scene_path, "scene.pkl")
 scene = pickle.load(open(planning_scene_pkl, 'rb'))
 # --------------------------------------------------
@@ -41,18 +42,21 @@ unilateral_sliding_region_width = 0.01  # old: 0.005
 
 # test on robot
 pusher_r = 0.0075
-slider_geometry = scene['target']['geom'] + [pusher_r]
+slider_bbox = scene['target']['bbox']
+slider_control_pts = scene['target']['control_pts']
+slider_curve = bspline_curve(slider_control_pts)
 
-fric_coeff_slider_pusher = 0.1
+fric_coeff_slider_pusher = 0.01
 fric_coeff_slider_ground = 0.3
-reachable_set_time_step = 0.01
+reachable_set_time_step = 0.05
 nonlinear_dynamics_time_step = 0.01
 
 # planner_configuration
 max_planning_time = 100.0
 max_nodes_in_tree = 1000
-goal_tolerance = 0.001
-goal_sampling_bias = 0.1  # take sample from goal
+goal_tolerance = 0.01
+goal_sampling_bias_min = 0.1  # take sample from goal
+goal_sampling_bias_max = 0.5  # take sample from goal
 mode_consistent_sampling_bias = 0.2  # keey dynamic mode consistent (invariant contact face)
 distance_scaling_array = np.array([1.0, 1.0, 0.0695])
 quad_cost_state = np.diag([1.0, 1.0, 0.0695])
@@ -87,15 +91,18 @@ def cost_to_go(start_state, goal_state, applied_input):
     input_cost = np.mean(np.diagonal(np.matmul(applied_input.T, np.matmul(quad_cost_input, applied_input))))
     return state_cost + input_cost
 
-planning_dyn = PushDTHybridSystem(f_lim=force_limit,
+planning_dyn = PushDTHybridSystem(curve=slider_curve,
+                                  f_lim=force_limit,
                                   dpsic_lim=pusher_vel_limit,
                                   unilateral_sliding_region=unilateral_sliding_region_width,
-                                  slider_geom=slider_geometry,
+                                  slider_bbox=slider_bbox,
+                                  pusher_r=pusher_r,
                                   miu_slider_pusher=fric_coeff_slider_pusher,
                                   miu_slider_ground=fric_coeff_slider_ground,
                                   quad_cost_input=quad_cost_input,
                                   reachable_set_time_step=reachable_set_time_step,
-                                  nldynamics_time_step=nonlinear_dynamics_time_step)
+                                  nldynamics_time_step=nonlinear_dynamics_time_step,
+                                  limit_surf_gain=0.0001)
 
 # --------------------------------------------------
 # General Hybrid R3T Algorithm
@@ -122,7 +129,8 @@ planning_dyn = PushDTHybridSystem(f_lim=force_limit,
 planner = SymbolicSystem_Hybrid_R3T_Contact(init_state=np.append(x_init, psic_init),
                                             sys=planning_dyn,
                                             sampler=sampler,
-                                            goal_sampling_bias=goal_sampling_bias,
+                                            goal_sampling_bias_min=goal_sampling_bias_min,
+                                            goal_sampling_bias_max=goal_sampling_bias_max,
                                             mode_consistent_sampling_bias=mode_consistent_sampling_bias,
                                             step_size=reachable_set_time_step,
                                             planning_scene_pkl=planning_scene_pkl,
@@ -257,6 +265,10 @@ if success:
 
 print('Report: mode consistency rate {0}!'.format(np.sum(planner.polytope_data['consistent'])/len(planner.polytope_data['consistent'])))
 
+fig.legend()
+fig_data.legend()
+plt.show()
+
 import pdb; pdb.set_trace()
 
 # timestamp = time.strftime('%Y_%m_%d_%H_%M',time.localtime(int(round(time.time()*1000))/1000))
@@ -272,6 +284,3 @@ report_path = planning_scene_path
 # planner.get_scene_of_planned_path(save_dir=os.path.join(r3t_root_dir, 'data', 'debug', 'planned_path'))
 planner.get_plan_anim_raw_data(data_root=report_path)
 planner.get_control_nom_data(data_root=report_path)
-fig.legend()
-fig_data.legend()
-plt.show()

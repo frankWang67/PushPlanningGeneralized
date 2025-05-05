@@ -5,33 +5,36 @@ import casadi as cs
 import copy
 from matplotlib import pyplot as plt
 from matplotlib import patches
+from matplotlib.path import Path
 from scipy.spatial.transform import Rotation as R
 import pickle
 
 from polytope_symbolic_system.common.intfunc import *
 from polytope_symbolic_system.common.utils import *
+from polytope_symbolic_system.common.bspline import bspline_curve
 from r3t.polygon.utils import *
 from r3t.polygon.process import *
 from r3t.polygon.plot_utils import *
 from r3t.polygon.collision_interface import collision_reaction
-
 
 class ContactBasic:
     """
     Underlying class of R3T, including basic information about object-object contact,
     including friction coefficient, geometry ...
     """
-    def __init__(self, miu_list=None, geom_list=None, A_list=None, geom_target=None, A_target=None, \
-                    miu_pusher_slider=0.3, contact_time=0., is_rect_flag=None) -> None:
+    def __init__(self, miu_list=None, curve_list=None, bbox_list=None, A_list=None, curve_target=None, bbox_target=None, A_target=None, \
+                    miu_pusher_slider=0.01, contact_time=0., is_rect_flag=None) -> None:
         self.miu_list = miu_list  # friction coeff between all objects and target
-        self.geom_list = geom_list  # geometry of all objects
+        self.curve_list = curve_list
+        self.bbox_list = bbox_list  # geometry of all objects
         self.A_list = A_list  # limit surface of all obstacles
-        self.geom_target = geom_target  # geometry of the target object
+        self.curve_target = curve_target
+        self.bbox_target = bbox_target  # geometry of the target object
         self.A_target = A_target  # limit surface of the target object
         self.miu_pusher_slider = miu_pusher_slider  # the friction coefficient between pusher and slider
         self.contact_time = contact_time
         if is_rect_flag is None:
-            self.is_rect_flag = [True for i in range(len(self.geom_list))]  # same length as geom_list
+            self.is_rect_flag = [True for i in range(len(self.bbox_list))]  # same length as geom_list
         else:
             self.is_rect_flag = is_rect_flag
         # FIXME: more to be added
@@ -41,13 +44,17 @@ class PlanningScene:
     Underlying class of NodeHybrid, including contact_flag, all polygons, and obstacle
     states
     """
-    def __init__(self, in_contact=False, target_polygon=None, polygons=None, states=None, types=None) -> None:
+    def __init__(self, in_contact=False, target_curve=None, target_polygon=None, target_state=None, curves=None, polygons=None, states=None, types=None, goal_state=None, goal_poly=None) -> None:
         self.in_contact = in_contact
+        self.target_curve = target_curve
         self.target_polygon = target_polygon
+        self.target_state = target_state
+        self.curves = curves
         self.polygons = polygons
         self.states = states
         self.types = types
-        self.goal_poly = None
+        self.goal_state = goal_state
+        self.goal_poly = goal_poly
 
 def load_planning_scene_from_file(scene_pkl):
     """
@@ -57,23 +64,15 @@ def load_planning_scene_from_file(scene_pkl):
     :return: ContactBasic object
     """
     raw = pickle.load(open(scene_pkl, 'rb'))
-    target_polygon = gen_polygon(coord=raw['target']['x'], geom=raw['target']['geom'], type='box')
-    obstacle_states, obstacle_polygons = [], []
+    target_polygon = gen_polygon(coord=raw['target']['x'], bbox=raw['target']['bbox'])
+    target_curve = bspline_curve(raw['target']['control_pts'])
+    obstacle_states, obstacle_curves, obstacle_polygons = [], [], []
     
     for i in range(raw['obstacle']['num']):
         obstacle_states.append(raw['obstacle']['x'][i])
-        
-        ## for box shape only
-        if not 'shape' in raw['obstacle']:
-            obstacle_polygons.append(gen_polygon(coord=raw['obstacle']['x'][i],
-                                                 geom=raw['obstacle']['geom'][i],
-                                                 type='box'))
-
-        ## for general polygon shapes
-        else:
-            obstacle_polygons.append(gen_polygon(coord=raw['obstacle']['x'][i],
-                                                 geom=raw['obstacle']['geom'][i],
-                                                 type=raw['obstacle']['shape'][i]))
+        obstacle_curves.append(bspline_curve(raw['obstacle']['control_pts'][i]))
+        obstacle_polygons.append(gen_polygon(coord=raw['obstacle']['x'][i],
+                                             bbox=raw['obstacle']['bbox'][i]))
 
     if 'type' in raw['obstacle']:
         types = raw['obstacle']['type']
@@ -82,16 +81,24 @@ def load_planning_scene_from_file(scene_pkl):
 
     # prepare planning scene and basic information
     scene = PlanningScene(in_contact=False,
+                          target_curve=target_curve,
                           target_polygon=target_polygon,
+                          target_state=raw['target']['x'],
+                          curves=obstacle_curves,
                           polygons=obstacle_polygons,
                           states=obstacle_states,
-                          types=types)
+                          types=types,
+                          goal_state=raw['goal'],
+                          goal_poly=raw['goal_poly'])
 
     info = ContactBasic(miu_list=raw['obstacle']['miu'],
-                        geom_list=raw['obstacle']['geom'],
+                        curve_list=obstacle_curves,
+                        bbox_list=raw['obstacle']['bbox'],
                         A_list=raw['obstacle']['A_list'],
                         contact_time=raw['contact']['dt'],
-                        geom_target=raw['target']['geom'])
+                        curve_target=target_curve,
+                        bbox_target=raw['target']['bbox'],
+                        A_target=raw['target']['A'])
 
     if 'goal_poly' in raw:
         scene.goal_poly=raw['goal_poly']
@@ -118,7 +125,7 @@ def collision_check_and_contact_reconfig(basic:ContactBasic, scene:PlanningScene
         target_state = state_list
     target_state = np.atleast_2d(target_state)[:, :3]
 
-    target_polygon_next = gen_polygon(target_state[-1, :], basic.geom_target, 'box')
+    target_polygon_next = gen_polygon(target_state[-1, :], basic.bbox_target)
     new_scene.target_polygon = target_polygon_next
     
     # first step velocity
@@ -159,8 +166,8 @@ def collision_check_and_contact_reconfig(basic:ContactBasic, scene:PlanningScene
         contact_config[idx]['basic']['miu'] = basic.miu_list[idx]
         contact_config[idx]['obstacle']['A'] = basic.A_list[idx]
         contact_config[idx]['target']['vel'] = target_velocity
-        contact_config[idx]['target']['geom'] = basic.geom_target
-        contact_config[idx]['obstacle']['geom'] = basic.geom_list[idx]
+        contact_config[idx]['target']['bbox'] = basic.bbox_target
+        contact_config[idx]['obstacle']['bbox'] = basic.bbox_list[idx]
 
     new_contact_config = update_contact_configuration(target_state=target_state,
                                                       contact_config=contact_config)
@@ -324,14 +331,14 @@ def visualize_scene(scene:PlanningScene, fig=None, ax=None, alpha=1.0, \
         ax.imshow(img, extent=xlim+ylim)
 
     cmap = plt.cm.Pastel2
-    for idx, polygon in enumerate(scene.polygons):
+    for idx, curve in enumerate(scene.curves):
         if bool(movability[idx]) is False:
-            obs_patch = patches.Polygon(np.array(polygon.exterior.coords.xy).T, facecolor=cmap(idx), alpha=alpha, edgecolor='black', linewidth=3, hatch='x')
+            obs_patch = patches.PathPatch(Path(curve.pt_samples), facecolor=cmap(idx), alpha=alpha, edgecolor='black', linewidth=3, hatch='x')
         else:
-            obs_patch = patches.Polygon(np.array(polygon.exterior.coords.xy).T, facecolor=cmap(idx), alpha=alpha, edgecolor='black', linewidth=3)
+            obs_patch = patches.PathPatch(Path(curve.pt_samples), facecolor=cmap(idx), alpha=alpha, edgecolor='black', linewidth=3)
         ax.add_artist(obs_patch)
 
-    target_patch = patches.Polygon(np.array(scene.target_polygon.exterior.coords.xy).T, facecolor='#1f77b4', alpha=alpha, edgecolor='black', linewidth=3)
+    target_patch = patches.PathPatch(Path(scene.target_curve.pt_samples), facecolor='#1f77b4', alpha=alpha, edgecolor='black', linewidth=3)
     ax.add_patch(target_patch)
 
     # visualize goal
