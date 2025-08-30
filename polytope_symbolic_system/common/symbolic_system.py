@@ -567,6 +567,11 @@ class PushDTHybridSystem:
         # differentiable function
         self.xdot_func = cs.Function('xdot', [self.x, self.u], [self.xdot])
 
+        self.A_xdot = cs.jacobian(self.xdot, self.x)
+        self.B_xdot = cs.jacobian(self.xdot, self.u)
+        self.A_xdot_func = cs.Function('A_xdot_func', [self.x, self.u], [self.A_xdot])
+        self.B_xdot_func = cs.Function('B_xdot_func', [self.x, self.u], [self.B_xdot])
+
         #  -------------------------------------------------------------------
         # matrices for AH-polytope construction
         A_mat = cs.jacobian(self.f_rcbset, self.x)
@@ -957,19 +962,31 @@ class PushDTHybridSystem:
         dpsic = angle_diff(current_psic, goal_psic) / self.reachable_set_time_step
 
         # calculate desired force
-        linear_system = self.get_linearization(state=np.append(nominal_x[:-1], (current_psic+goal_psic)/2.),
-                                               u_bar=nominal_u,
-                                               mode=mode_string)
+        # # linear_system = self.get_linearization(state=np.append(nominal_x[:-1], (current_psic+goal_psic)/2.),
+        # linear_system = self.get_linearization(state=nominal_x,
+        #                                        u_bar=nominal_u,
+        #                                        mode=mode_string)
 
-        A_mat = linear_system.A.copy()
-        B_mat_pinv = np.linalg.pinv(linear_system.B[:, :-1])
-        c_mat = linear_system.c.copy()
-        nominal_state = linear_system.x_bar.copy()
-        # nominal_state = nominal_x.copy().flatten()
+        # A_mat = linear_system.A.copy()
+        # B_mat_pinv = np.linalg.pinv(linear_system.B[:, :-1])
+        # c_mat = linear_system.c.copy()
+        # nominal_state = linear_system.x_bar.copy()
+        # # nominal_state = nominal_x.copy().flatten()
+
+        goal_state_with_psic = np.append(goal_state, goal_psic)
+        A_mat = np.array(self.A_xdot_func(nominal_x, nominal_u))
+        B_mat = np.array(self.B_xdot_func(nominal_x, nominal_u))
+        B_mat_pinv = np.linalg.pinv(B_mat)
+        f_nominal = np.array(self.xdot_func(nominal_x, nominal_u)).flatten()
+
         approximate_input = np.zeros(self.dim_u)
-        approximate_input[:-1] = np.matmul(B_mat_pinv, goal_state.flatten() - np.matmul(A_mat, nominal_state) - c_mat.flatten())
+        # approximate_input[:-1] = np.matmul(B_mat_pinv, goal_state.flatten() - np.matmul(A_mat, np.append(goal_state, goal_psic) - nominal_state) - c_mat.flatten()) + nominal_u[:-1]
+        approximate_input = np.matmul(B_mat_pinv, goal_state_with_psic - np.matmul(A_mat, goal_state_with_psic - nominal_x) - f_nominal) + nominal_u
         approximate_input[-1] = dpsic
         approximate_input = approximate_input.flatten()[:self.dim_u]
+
+        if approximate_input[0] < 0.0:
+            approximate_input *= -1
 
         return approximate_input
 

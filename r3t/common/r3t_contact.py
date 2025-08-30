@@ -178,7 +178,7 @@ class R3T_Hybrid_Contact:
                                          sys=self.sys,
                                          contact_face='back',
                                          psic=self.sys.psic_each_face_center['back'],
-                                         vis=False)
+                                         vis=True)
 
         ## compute_reachable_set
         # (state with psic, input) --> the PolytopeReachableSetTree object
@@ -437,6 +437,7 @@ class R3T_Hybrid_Contact:
             return True, self.goal_node
 
         while True:
+            self.simulator.vis = ((default_timer() - start) > 100)
             # print("R3T_Hybrid: running search")
             if self.print_flag:
                 print("R3T_Hybrid: current time: {0}, total nodes: {1}".format(default_timer()-start, self.node_tally))
@@ -463,6 +464,7 @@ class R3T_Hybrid_Contact:
             #sample the state space
             sample_is_valid = False
             sample_count = 0
+            collision_polytopes = []
             while not sample_is_valid:
                 # state: (x, y, theta), without psic
                 if np.random.rand() <= self.goal_sampling_bias:
@@ -487,6 +489,9 @@ class R3T_Hybrid_Contact:
                                                                                            Z_obs_list=Z_obs_list,
                                                                                            duplicate_search_azimuth=True,
                                                                                            slider_in_contact=nearest_node.planning_scene.in_contact)
+                    if nearest_polytope in collision_polytopes:
+                        sample_is_valid = False
+                        continue
                     new_dist = np.linalg.norm(new_state[:2] - self.goal_xy)
                     if new_dist < self.min_dist_to_goal:
                         self.min_dist_to_goal = new_dist
@@ -504,6 +509,8 @@ class R3T_Hybrid_Contact:
                     # EXTENSION
                     is_extended, new_node, error_code = self.extend(new_state, nearest_node, nearest_polytope, Z_obs_list)
                     if not is_extended:
+                        if error_code == 3:
+                            collision_polytopes.append(nearest_polytope)
                         if self.print_flag:
                             print('R3T_Hybrid: extension from {0} to {1} failed!'.format(nearest_node.state[:-1], new_state))
                             print('R3T_Hybrid: extension error report -> {0}'.format(EXTENSION_ERROR[error_code]))
@@ -593,7 +600,7 @@ class R3T_Hybrid_Contact:
 
                 # assign goal node
                 self.goal_node=goal_node
-                print("finished search")
+                print(f"finished search in {default_timer() - start} seconds")
                 return True, self.goal_node
 
     def rewire(self, new_node):

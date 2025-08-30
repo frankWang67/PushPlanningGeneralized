@@ -155,6 +155,11 @@ class MujocoSimulator:
         steps = round(sim_time / self.time_step)
         if steps == 0:
             raise ValueError(f"MuJoCo simulation time step too small. Now it's {self.time_step}, while the simulation time is {sim_time}.")
+        # if np.abs(path[-1][-1] - path[0][-1]) > np.pi:
+        #     if path[-1][-1] < path[0][-1]:
+        #         path[-1][-1] += 2*np.pi
+        #     else:
+        #         path[0][-1] += 2*np.pi
         # path_interp = np.linspace(path[0], path[-1], steps+1)
         for i in range(steps):
             self.data.mocap_pos[self.mocap_id][0] += v_pusher[0] * self.time_step

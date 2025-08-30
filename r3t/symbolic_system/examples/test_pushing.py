@@ -28,7 +28,8 @@ planning_scene_pkl  = os.path.join(planning_scene_path, "scene.pkl")
 scene = pickle.load(open(planning_scene_pkl, 'rb'))
 # --------------------------------------------------
 
-xmin, xmax, ymin, ymax, thetamin, thetamax = -0.15, 0.35, -0.30, 0.30, -np.pi, np.pi
+# xmin, xmax, ymin, ymax, thetamin, thetamax = -0.10, 0.20, -0.15, 0.15, -np.pi, np.pi
+xmin, xmax, ymin, ymax, thetamin, thetamax = -0.15, 0.25, -0.18, 0.20, -np.pi, np.pi
 
 search_space_dimensions = np.array([(xmin, xmax), (ymin, ymax), (thetamin, thetamax)])
 # state_space_obstacles = MultiPolygon()  # empty obstacles
@@ -55,11 +56,13 @@ nonlinear_dynamics_time_step = 0.01
 max_planning_time = 100.0
 max_nodes_in_tree = 1000
 goal_tolerance = 0.01
-goal_sampling_bias_min = 0.1  # take sample from goal
+goal_sampling_bias_min = 0.5  # take sample from goal
 goal_sampling_bias_max = 0.5  # take sample from goal
 mode_consistent_sampling_bias = 0.2  # keey dynamic mode consistent (invariant contact face)
-distance_scaling_array = np.array([1.0, 1.0, 0.0695])
-quad_cost_state = np.diag([1.0, 1.0, 0.0695])
+# distance_scaling_array = np.array([1.0, 1.0, 0.0695])
+# quad_cost_state = np.diag([1.0, 1.0, 0.0695])
+distance_scaling_array = np.array([1.0, 1.0, 0.01])
+quad_cost_state = np.diag([1.0, 1.0, 0.01])
 # quad_cost_input = np.diag([0.01, 0.01, 0.])
 quad_cost_input = np.diag([0.001, 0.001, 5e-6])
 
@@ -182,9 +185,11 @@ plot_2d_flag = True
 from matplotlib import pyplot as plt
 from pypolycontain.visualization.visualize_2D import visualize_3D_AH_polytope_push_planning
 fig = plt.figure()
-ax = fig.add_subplot(131, projection='3d')
-ax_2d = fig.add_subplot(132)
-ax_time = fig.add_subplot(133)
+# ax = fig.add_subplot(131, projection='3d')
+# ax_2d = fig.add_subplot(132)
+# ax_time = fig.add_subplot(133)
+ax_2d = fig.add_subplot(121)
+ax_time = fig.add_subplot(122)
 
 # ax.scatter(state_array[:, 0], state_array[:, 1], state_array[:, 2], c='orange', s=4)
 
@@ -209,6 +214,8 @@ if plot_3d_flag:
 if plot_2d_flag:
     ax_2d.scatter(x_init[0], x_init[1], color='red', marker='o', s=10)
     ax_2d.scatter(x_goal[0], x_goal[1], color='green', marker='o', s=10)
+ax_2d.set_xlabel("x")
+ax_2d.set_ylabel("y")
 
 query_state = np.array([0.2, 0.1, 2.5])
 candidate_states, centroid_state, candidate_polytopes, centroid_polytope = test_nearest_polytope_search(planner, query_state=query_state)
@@ -233,11 +240,13 @@ if plot_3d_flag:
 
 ax_time.plot(planner.time_cost['nn_search'], label='t_nn_search')
 ax_time.plot(planner.time_cost['extend'], label='t_extend')
-ax_time.plot(planner.time_cost['store_and_rewire'], label='t_rewire')
-ax_time.plot(planner.time_cost['rewire_parent'], label='t_rewire1')
-ax_time.plot(planner.time_cost['rewire_child'], label='t_rewire2')
+# ax_time.plot(planner.time_cost['store_and_rewire'], label='t_rewire')
+# ax_time.plot(planner.time_cost['rewire_parent'], label='t_rewire1')
+# ax_time.plot(planner.time_cost['rewire_child'], label='t_rewire2')
 ax_time.plot(planner.time_cost['state_tree_insert'], label='t_state_i')
 ax_time.plot(planner.time_cost['set_tree_insert'], label='t_set_i')
+ax_time.set_xlabel("node id")
+ax_time.set_ylabel("time (s)")
 ax_time.grid('on')
 
 fig_data = plt.figure()
